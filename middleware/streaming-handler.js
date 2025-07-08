@@ -132,7 +132,7 @@ class StreamingHandler {
         }
       }.bind(this),
       
-      final(callback) {
+      final: function(callback) {
         res.end();
         logger.info('Stream completed', { totalSize });
         callback();
