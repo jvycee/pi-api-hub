@@ -12,6 +12,10 @@ const IntelligentCache = require('./middleware/intelligent-cache');
 const RequestDeduplicationBatcher = require('./middleware/request-deduplication');
 const WebhookHandler = require('./middleware/webhook-handler');
 const AIFallbackHandler = require('./middleware/ai-fallback-handler');
+// Security middleware
+const AdminAuthMiddleware = require('./middleware/admin-auth');
+const SecurityHeadersMiddleware = require('./middleware/security-headers');
+const InputValidationMiddleware = require('./middleware/input-validation');
 const PaginationHelper = require('./helpers/pagination-helper');
 const CursorPagination = require('./helpers/cursor-pagination');
 const JSONOptimizer = require('./helpers/json-optimizer');
@@ -58,10 +62,22 @@ const webhookHandler = new WebhookHandler({
 });
 const aiHandler = new AIFallbackHandler({
   anthropicApiKey: config.apis?.anthropic?.apiKey,
-  ollamaBaseUrl: 'http://10.0.0.218:11434', // Your Mac Mini
+  ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'http://10.0.0.218:11434',
   defaultModel: 'llama3.1:8b',
   primaryProvider: 'ollama', // Ollama first, Claude for specialized tasks
   enableFallback: true
+});
+// Security middleware instances
+const adminAuth = config.security?.adminApiKey ? new AdminAuthMiddleware({
+  sessionTimeout: 30 * 60 * 1000, // 30 minutes
+  maxAttempts: 5,
+  lockoutTime: 15 * 60 * 1000 // 15 minutes
+}) : null;
+const securityHeaders = new SecurityHeadersMiddleware();
+const inputValidation = new InputValidationMiddleware({
+  maxBodySize: 10 * 1024 * 1024, // 10MB
+  maxQueryParams: 50,
+  sanitizeStrings: true
 });
 const paginationHelper = new PaginationHelper();
 const cursorPagination = new CursorPagination();
@@ -76,8 +92,29 @@ autoRestart.setMonitors(performanceCollector, memoryMonitor);
 // Setup webhook handlers
 webhookHandler.setupDefaultHandlers();
 
-// Middleware
-app.use(cors());
+// Helper function for admin authentication
+const requireAdminAuth = adminAuth?.middleware() || ((req, res, next) => {
+  logger.warn('Admin endpoint accessed without authentication - ADMIN_API_KEY not configured', {
+    path: req.path,
+    method: req.method,
+    ip: req.ip
+  });
+  next();
+});
+
+// Security middleware first
+app.use(securityHeaders.middleware());
+app.use(inputValidation.middleware());
+
+// CORS with secure origins
+app.use(cors({
+  origin: config.security?.corsOrigins || config.server?.corsOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key']
+}));
+
+// Standard middleware
 app.use(express.json({ limit: '10mb' })); // Limit JSON payload size
 app.use(compressionMiddleware.middleware());
 app.use(memoryMonitor.middleware());
@@ -294,7 +331,7 @@ app.get('/monitoring/logs', async (req, res) => {
 });
 
 // Force log rotation
-app.post('/monitoring/logs/rotate', async (req, res) => {
+app.post('/monitoring/logs/rotate', requireAdminAuth, async (req, res) => {
   const { logFile } = req.body;
   
   try {
@@ -321,7 +358,7 @@ app.post('/monitoring/logs/rotate', async (req, res) => {
 });
 
 // System restart endpoint (emergency banana button)
-app.post('/monitoring/restart', async (req, res) => {
+app.post('/monitoring/restart', requireAdminAuth, async (req, res) => {
   const { reason = "Manual restart via dashboard" } = req.body;
   
   logger.warn('System restart requested via dashboard', { reason });
@@ -414,7 +451,7 @@ app.get('/monitoring/cache', (req, res) => {
 });
 
 // POST /monitoring/cache/clear - Clear cache
-app.post('/monitoring/cache/clear', (req, res) => {
+app.post('/monitoring/cache/clear', requireAdminAuth, (req, res) => {
   try {
     const entriesCleared = intelligentCache.clear();
     res.json({
@@ -516,7 +553,7 @@ app.get('/monitoring/deduplication', (req, res) => {
 });
 
 // POST /monitoring/deduplication/flush - Flush all pending batches
-app.post('/monitoring/deduplication/flush', async (req, res) => {
+app.post('/monitoring/deduplication/flush', requireAdminAuth, async (req, res) => {
   try {
     await requestBatcher.flushBatches();
     res.json({
@@ -535,7 +572,7 @@ app.post('/monitoring/deduplication/flush', async (req, res) => {
 });
 
 // POST /monitoring/deduplication/clear - Clear deduplication data
-app.post('/monitoring/deduplication/clear', (req, res) => {
+app.post('/monitoring/deduplication/clear', requireAdminAuth, (req, res) => {
   try {
     requestBatcher.clearDeduplication();
     res.json({
@@ -631,7 +668,7 @@ app.get('/monitoring/webhooks/handlers', (req, res) => {
 });
 
 // POST /monitoring/webhooks/clear - Clear webhook statistics
-app.post('/monitoring/webhooks/clear', (req, res) => {
+app.post('/monitoring/webhooks/clear', requireAdminAuth, (req, res) => {
   try {
     webhookHandler.clearStats();
     res.json({
@@ -701,7 +738,7 @@ app.get('/monitoring/ai', (req, res) => {
 });
 
 // POST /monitoring/ai/test - Test AI provider connectivity
-app.post('/monitoring/ai/test', async (req, res) => {
+app.post('/monitoring/ai/test', requireAdminAuth, async (req, res) => {
   try {
     const results = await aiHandler.testProviders();
     res.json({
@@ -720,7 +757,7 @@ app.post('/monitoring/ai/test', async (req, res) => {
 });
 
 // POST /monitoring/ai/refresh-ollama - Refresh Ollama connection
-app.post('/monitoring/ai/refresh-ollama', async (req, res) => {
+app.post('/monitoring/ai/refresh-ollama', requireAdminAuth, async (req, res) => {
   try {
     const success = await aiHandler.refreshOllamaConnection();
     res.json({
@@ -742,7 +779,7 @@ app.post('/monitoring/ai/refresh-ollama', async (req, res) => {
 });
 
 // POST /monitoring/ai/reset-credits - Reset credit exhaustion flag
-app.post('/monitoring/ai/reset-credits', (req, res) => {
+app.post('/monitoring/ai/reset-credits', requireAdminAuth, (req, res) => {
   try {
     aiHandler.resetCreditExhaustion();
     res.json({
@@ -761,7 +798,7 @@ app.post('/monitoring/ai/reset-credits', (req, res) => {
 });
 
 // POST /monitoring/ai/clear - Clear AI statistics
-app.post('/monitoring/ai/clear', (req, res) => {
+app.post('/monitoring/ai/clear', requireAdminAuth, (req, res) => {
   try {
     aiHandler.clearStats();
     res.json({

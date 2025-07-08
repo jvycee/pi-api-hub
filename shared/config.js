@@ -4,7 +4,10 @@ const config = {
   server: {
     port: parseInt(process.env.PORT) || 3000,
     mcpPort: parseInt(process.env.MCP_PORT) || 3001,
-    env: process.env.NODE_ENV || 'development'
+    env: process.env.NODE_ENV || 'development',
+    corsOrigins: process.env.CORS_ORIGINS ? 
+      process.env.CORS_ORIGINS.split(',').map(origin => origin.trim()) : 
+      (process.env.NODE_ENV === 'production' ? ['https://your-domain.com'] : ['http://localhost:3000'])
   },
   
   apis: {
@@ -38,6 +41,19 @@ const config = {
       warning: 6 * 1024 * 1024 * 1024, // 6GB
       critical: 7 * 1024 * 1024 * 1024 // 7GB  
     }
+  },
+
+  security: {
+    adminApiKey: process.env.ADMIN_API_KEY,
+    corsOrigins: process.env.CORS_ORIGINS ? 
+      process.env.CORS_ORIGINS.split(',').map(origin => origin.trim()) : 
+      (process.env.NODE_ENV === 'production' ? ['https://your-domain.com'] : ['http://localhost:3000']),
+    enableSecurityHeaders: process.env.ENABLE_SECURITY_HEADERS !== 'false',
+    enableInputValidation: process.env.ENABLE_INPUT_VALIDATION !== 'false',
+    rateLimitAdmin: {
+      windowMs: parseInt(process.env.ADMIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+      max: parseInt(process.env.ADMIN_RATE_LIMIT_MAX_REQUESTS) || 10 // Very restrictive for admin
+    }
   }
 };
 
@@ -52,6 +68,17 @@ function validateConfig() {
   
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+
+  // Security warnings
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.ADMIN_API_KEY) {
+      console.warn('🚨 WARNING: ADMIN_API_KEY not set in production! Admin endpoints will be disabled.');
+    }
+    
+    if (!process.env.CORS_ORIGINS) {
+      console.warn('🚨 WARNING: CORS_ORIGINS not set in production! Using default restrictive origins.');
+    }
   }
 }
 
