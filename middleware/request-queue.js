@@ -53,40 +53,46 @@ class RequestQueue {
   processRequest(req, res, next) {
     this.activeRequests++;
     
-    // Add response size limiting
-    const originalSend = res.send;
-    const originalJson = res.json;
-    
-    res.send = (body) => {
-      if (this.checkResponseSize(body, req.path)) {
-        return originalSend.call(res, body);
-      } else {
-        if (!res.headersSent) {
-          res.status(413);
+    // Add response size limiting only if not already wrapped
+    if (!res._queueSizeLimited) {
+      const originalSend = res.send;
+      const originalJson = res.json;
+      
+      res.send = (body) => {
+        if (res.headersSent || res.finished) {
+          return;
         }
-        return originalJson.call(res, {
-          success: false,
-          error: 'Response too large for Pi memory constraints',
-          maxSize: this.formatBytes(this.maxResponseSize)
-        });
-      }
-    };
-    
-    res.json = (obj) => {
-      const body = JSON.stringify(obj);
-      if (this.checkResponseSize(body, req.path)) {
-        return originalJson.call(res, obj);
-      } else {
-        if (!res.headersSent) {
+        if (this.checkResponseSize(body, req.path)) {
+          return originalSend.call(res, body);
+        } else {
           res.status(413);
+          return originalJson.call(res, {
+            success: false,
+            error: 'Response too large for Pi memory constraints',
+            maxSize: this.formatBytes(this.maxResponseSize)
+          });
         }
-        return originalJson.call(res, {
-          success: false,
-          error: 'Response too large for Pi memory constraints',
-          maxSize: this.formatBytes(this.maxResponseSize)
-        });
-      }
-    };
+      };
+      
+      res.json = (obj) => {
+        if (res.headersSent || res.finished) {
+          return;
+        }
+        const body = JSON.stringify(obj);
+        if (this.checkResponseSize(body, req.path)) {
+          return originalJson.call(res, obj);
+        } else {
+          res.status(413);
+          return originalJson.call(res, {
+            success: false,
+            error: 'Response too large for Pi memory constraints',
+            maxSize: this.formatBytes(this.maxResponseSize)
+          });
+        }
+      };
+      
+      res._queueSizeLimited = true;
+    }
 
     // Track request completion
     const cleanup = () => {
