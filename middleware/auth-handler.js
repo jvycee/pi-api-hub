@@ -35,7 +35,7 @@ class AuthHandler {
   async callHubSpot(endpoint, method = 'GET', data = null) {
     try {
       logger.info(`Making HubSpot ${method} request to ${endpoint}`);
-      
+
       const response = await this.hubspotClient({
         method,
         url: endpoint,
@@ -55,11 +55,31 @@ class AuthHandler {
     }
   }
 
+  // HubSpot Search API calls
+  async searchHubSpot(objectType, searchRequest) {
+    try {
+      logger.info(`Making HubSpot Search request for ${objectType}`);
+
+      const response = await this.hubspotClient.post(`/crm/v3/objects/${objectType}/search`, searchRequest);
+
+      logger.info(`HubSpot Search request successful: ${response.status}`);
+      return response.data;
+    } catch (error) {
+      logger.error('HubSpot Search API Error:', {
+        objectType,
+        status: error.response?.status,
+        message: error.response?.data?.message || error.message,
+        category: error.response?.data?.category
+      });
+      throw error;
+    }
+  }
+  
   // Anthropic API calls
   async callAnthropic(data) {
     try {
       logger.info('Making Anthropic API request');
-      
+
       const response = await this.anthropicClient.post('/v1/messages', data);
 
       logger.info(`Anthropic request successful: ${response.status}`);
@@ -77,7 +97,7 @@ class AuthHandler {
   async callHubSpotGraphQL(query, variables = {}) {
     try {
       logger.info('Making HubSpot GraphQL request');
-      
+
       const response = await this.hubspotClient.post('/collector/graphql', {
         query,
         variables
@@ -105,9 +125,9 @@ class AuthHandler {
       results.hubspot = { status: 'connected', error: null };
       logger.info('HubSpot connection test: SUCCESS');
     } catch (error) {
-      results.hubspot = { 
-        status: 'error', 
-        error: error.response?.data?.message || error.message 
+      results.hubspot = {
+        status: 'error',
+        error: error.response?.data?.message || error.message
       };
       logger.error('HubSpot connection test: FAILED');
     }
@@ -134,9 +154,9 @@ class AuthHandler {
       results.hubspotGraphQL = { status: 'connected', error: null };
       logger.info('HubSpot GraphQL connection test: SUCCESS');
     } catch (error) {
-      results.hubspotGraphQL = { 
-        status: 'error', 
-        error: error.response?.data?.errors?.[0]?.message || error.message 
+      results.hubspotGraphQL = {
+        status: 'error',
+        error: error.response?.data?.errors?.[0]?.message || error.message
       };
       logger.error('HubSpot GraphQL connection test: FAILED');
     }
@@ -149,9 +169,9 @@ class AuthHandler {
       results.anthropic = { status: 'connected', error: null };
       logger.info('Anthropic connection test: SUCCESS');
     } catch (error) {
-      results.anthropic = { 
-        status: 'error', 
-        error: error.response?.data?.error?.message || error.message 
+      results.anthropic = {
+        status: 'error',
+        error: error.response?.data?.error?.message || error.message
       };
       logger.error('Anthropic connection test: FAILED');
     }

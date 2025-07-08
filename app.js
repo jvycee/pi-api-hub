@@ -100,25 +100,24 @@ app.post('/api/hubspot/contacts', async (req, res) => {
   }
 });
 
-// Anthropic proxy endpoint
-app.post('/api/anthropic/messages', async (req, res) => {
+// HubSpot Search endpoints
+app.post('/api/hubspot/search/:objectType', async (req, res) => {
   try {
-    const { model = 'claude-3-haiku-20240307', max_tokens = 1000, messages } = req.body;
+    const { objectType } = req.params;
+    const searchRequest = req.body;
     
-    if (!messages || !Array.isArray(messages)) {
+    // Validate object type
+    const validObjectTypes = ['contacts', 'companies', 'deals', 'tickets', 'products'];
+    if (!validObjectTypes.includes(objectType)) {
       return res.status(400).json({
         success: false,
-        error: 'Messages array is required',
+        error: `Invalid object type. Must be one of: ${validObjectTypes.join(', ')}`,
         timestamp: new Date().toISOString()
       });
     }
 
-    const data = await authHandler.callAnthropic({
-      model,
-      max_tokens,
-      messages
-    });
-
+    const data = await authHandler.searchHubSpot(objectType, searchRequest);
+    
     res.json({
       success: true,
       data,
@@ -127,7 +126,8 @@ app.post('/api/anthropic/messages', async (req, res) => {
   } catch (error) {
     res.status(error.response?.status || 500).json({
       success: false,
-      error: error.response?.data?.error?.message || error.message,
+      error: error.response?.data?.message || error.message,
+      category: error.response?.data?.category,
       timestamp: new Date().toISOString()
     });
   }
@@ -158,6 +158,39 @@ app.post('/api/hubspot/graphql', async (req, res) => {
       success: false,
       error: error.response?.data?.errors?.[0]?.message || error.message,
       errors: error.response?.data?.errors,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Anthropic proxy endpoint
+app.post('/api/anthropic/messages', async (req, res) => {
+  try {
+    const { model = 'claude-3-haiku-20240307', max_tokens = 1000, messages } = req.body;
+    
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Messages array is required',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const data = await authHandler.callAnthropic({
+      model,
+      max_tokens,
+      messages
+    });
+
+    res.json({
+      success: true,
+      data,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(error.response?.status || 500).json({
+      success: false,
+      error: error.response?.data?.error?.message || error.message,
       timestamp: new Date().toISOString()
     });
   }
@@ -213,6 +246,8 @@ const server = app.listen(config.server.port, () => {
   logger.info('  GET  /api/hubspot/contacts - Get HubSpot contacts');
   logger.info('  POST /api/hubspot/contacts - Create HubSpot contact');
   logger.info('  POST /api/anthropic/messages - Send message to Claude');
+  logger.info('  POST /api/hubspot/search/:objectType - Search HubSpot objects');
+  logger.info('  POST /api/hubspot/search/:objectType - Search HubSpot objects');
   logger.info('  POST /api/hubspot/graphql - HubSpot GraphQL queries');
   logger.info('  ALL  /api/hubspot/* - Proxy to any HubSpot endpoint');
 });
