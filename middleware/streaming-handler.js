@@ -19,7 +19,7 @@ class StreamingHandler {
 
     return new stream.Transform({
       objectMode: true,
-      transform(chunk, encoding, callback) {
+      transform: function(chunk, encoding, callback) {
         buffer += chunk.toString();
         
         for (let i = 0; i < buffer.length; i++) {
@@ -74,7 +74,7 @@ class StreamingHandler {
         callback();
       },
       
-      flush(callback) {
+      flush: function(callback) {
         if (currentObject.trim()) {
           try {
             const parsedObject = JSON.parse(currentObject);
@@ -101,7 +101,7 @@ class StreamingHandler {
 
     return new stream.Writable({
       objectMode: true,
-      write(chunk, encoding, callback) {
+      write: function(chunk, encoding, callback) {
         try {
           let data;
           
@@ -222,7 +222,7 @@ class StreamingHandler {
 
       const writeTransform = new stream.Transform({
         objectMode: true,
-        transform(chunk, encoding, callback) {
+        transform: function(chunk, encoding, callback) {
           if (!isFirstChunk) {
             this.push(',');
           }
@@ -230,7 +230,7 @@ class StreamingHandler {
           isFirstChunk = false;
           callback();
         },
-        flush(callback) {
+        flush: function(callback) {
           this.push(']}');
           callback();
         }
