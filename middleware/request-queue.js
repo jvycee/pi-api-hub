@@ -61,7 +61,10 @@ class RequestQueue {
       if (this.checkResponseSize(body, req.path)) {
         return originalSend.call(res, body);
       } else {
-        return res.status(413).json({
+        if (!res.headersSent) {
+          res.status(413);
+        }
+        return originalJson.call(res, {
           success: false,
           error: 'Response too large for Pi memory constraints',
           maxSize: this.formatBytes(this.maxResponseSize)
@@ -74,7 +77,10 @@ class RequestQueue {
       if (this.checkResponseSize(body, req.path)) {
         return originalJson.call(res, obj);
       } else {
-        return res.status(413).json({
+        if (!res.headersSent) {
+          res.status(413);
+        }
+        return originalJson.call(res, {
           success: false,
           error: 'Response too large for Pi memory constraints',
           maxSize: this.formatBytes(this.maxResponseSize)
