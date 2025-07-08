@@ -1,6 +1,7 @@
 const stream = require('stream');
 const { pipeline } = require('stream/promises');
 const logger = require('../shared/logger');
+const streamTracker = require('../shared/stream-tracker');
 
 class StreamingHandler {
   constructor(options = {}) {
@@ -89,13 +90,24 @@ class StreamingHandler {
   }
 
   // Create a chunked response handler
-  createChunkedResponseHandler(res, contentType = 'application/json') {
+  createChunkedResponseHandler(res, contentType = 'application/json', metadata = {}) {
     let totalSize = 0;
+    const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Start tracking this stream
+    streamTracker.startStream(streamId, {
+      type: 'chunked',
+      contentType,
+      clientIp: res.req?.ip || 'unknown',
+      userAgent: res.req?.get('User-Agent') || 'unknown',
+      ...metadata
+    });
     
     res.writeHead(200, {
       'Content-Type': contentType,
       'Transfer-Encoding': 'chunked',
       'X-Streaming': 'true',
+      'X-Stream-Id': streamId,
       'Cache-Control': 'no-cache'
     });
 
@@ -113,14 +125,22 @@ class StreamingHandler {
           
           totalSize += Buffer.byteLength(data);
           
+          // Update stream progress
+          streamTracker.updateStreamProgress(streamId, totalSize);
+          
           // Check if we're exceeding max stream size
           if (totalSize > this.maxStreamSize) {
             logger.warn('Stream size limit exceeded', {
+              streamId,
               totalSize,
               maxSize: this.maxStreamSize
             });
             res.write('{"error": "Stream size limit exceeded"}\n');
             res.end();
+            streamTracker.endStream(streamId, { 
+              bytesStreamed: totalSize, 
+              reason: 'size_limit_exceeded' 
+            });
             return callback();
           }
           
@@ -134,7 +154,11 @@ class StreamingHandler {
       
       final: function(callback) {
         res.end();
-        logger.info('Stream completed', { totalSize });
+        streamTracker.endStream(streamId, { 
+          bytesStreamed: totalSize, 
+          reason: 'completed' 
+        });
+        logger.info('Stream completed', { streamId, totalSize });
         callback();
       }
     });
@@ -152,10 +176,23 @@ class StreamingHandler {
     let hasMore = true;
     let totalRecords = 0;
     
+    const streamId = `hubspot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    streamTracker.startStream(streamId, {
+      type: 'hubspot',
+      endpoint,
+      limit,
+      properties: properties.length
+    });
+    
     const readable = new stream.Readable({
       objectMode: true,
       async read() {
         if (!hasMore) {
+          streamTracker.endStream(streamId, { 
+            bytesStreamed: totalRecords * 1024, // Approximate bytes
+            recordsProcessed: totalRecords,
+            reason: 'completed'
+          });
           this.push(null);
           return;
         }
@@ -187,7 +224,14 @@ class StreamingHandler {
             hasMore = false;
           }
 
+          // Update stream progress
+          streamTracker.updateStreamProgress(streamId, totalRecords * 1024, {
+            recordsProcessed: totalRecords,
+            pagesProcessed: after ? 'multiple' : 'first'
+          });
+
           logger.info('Streamed HubSpot page', {
+            streamId,
             endpoint,
             recordsInPage: results.length,
             totalRecords,
@@ -196,6 +240,12 @@ class StreamingHandler {
 
         } catch (error) {
           logger.error('Error streaming HubSpot data:', error);
+          streamTracker.endStream(streamId, { 
+            bytesStreamed: totalRecords * 1024,
+            recordsProcessed: totalRecords,
+            reason: 'error',
+            error: error.message
+          });
           this.emit('error', error);
         }
       }
@@ -206,9 +256,19 @@ class StreamingHandler {
 
   // Memory-efficient GraphQL response handler
   async handleGraphQLStream(response, res) {
+    const streamId = `graphql_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     try {
+      streamTracker.startStream(streamId, {
+        type: 'graphql',
+        endpoint: '/api/hubspot/graphql',
+        clientIp: res.req?.ip || 'unknown'
+      });
+      
       const jsonTransform = this.createJSONStreamTransform();
-      const chunkedHandler = this.createChunkedResponseHandler(res);
+      const chunkedHandler = this.createChunkedResponseHandler(res, 'application/json', {
+        endpoint: '/api/hubspot/graphql'
+      });
 
       // Start streaming response
       res.writeHead(200, {
@@ -243,10 +303,15 @@ class StreamingHandler {
         chunkedHandler
       );
 
-      logger.info('GraphQL stream completed successfully');
+      logger.info('GraphQL stream completed successfully', { streamId });
 
     } catch (error) {
       logger.error('GraphQL streaming error:', error);
+      
+      streamTracker.endStream(streamId, { 
+        reason: 'error',
+        error: error.message
+      });
       
       if (!res.headersSent) {
         res.status(500).json({

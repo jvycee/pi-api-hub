@@ -1,4 +1,5 @@
 const logger = require('../shared/logger');
+const streamTracker = require('../shared/stream-tracker');
 
 class PaginationHelper {
   constructor(options = {}) {
@@ -250,26 +251,68 @@ class PaginationHelper {
         };
 
         if (stream === 'true') {
-          // Stream response for large datasets
+          // Stream response for large datasets with proper tracking
+          const streamId = `pagination_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          
+          streamTracker.startStream(streamId, {
+            type: 'pagination',
+            endpoint,
+            clientIp: req.ip || 'unknown',
+            userAgent: req.get('User-Agent') || 'unknown',
+            limit: paginationOptions.limit
+          });
+
           res.writeHead(200, {
             'Content-Type': 'application/json',
             'Transfer-Encoding': 'chunked',
-            'X-Pagination-Stream': 'true'
+            'X-Pagination-Stream': 'true',
+            'X-Stream-Id': streamId
           });
 
           res.write('{"results": [');
           let isFirst = true;
+          let totalBytes = 0;
+          let recordCount = 0;
 
-          const paginatedStream = this.createPaginatedStream(apiClient, endpoint, paginationOptions);
-          
-          for await (const record of paginatedStream) {
-            if (!isFirst) res.write(',');
-            res.write(JSON.stringify(record));
-            isFirst = false;
+          try {
+            const paginatedStream = this.createPaginatedStream(apiClient, endpoint, paginationOptions);
+            
+            for await (const record of paginatedStream) {
+              const chunk = (isFirst ? '' : ',') + JSON.stringify(record);
+              res.write(chunk);
+              
+              totalBytes += Buffer.byteLength(chunk);
+              recordCount++;
+              isFirst = false;
+              
+              // Update stream progress periodically
+              if (recordCount % 10 === 0) {
+                streamTracker.updateStreamProgress(streamId, totalBytes, {
+                  recordsProcessed: recordCount
+                });
+              }
+            }
+
+            res.write('], "stream": true}');
+            res.end();
+            
+            // End stream tracking
+            streamTracker.endStream(streamId, {
+              bytesStreamed: totalBytes,
+              recordsProcessed: recordCount,
+              reason: 'completed'
+            });
+            
+          } catch (error) {
+            logger.error('Pagination streaming error', { streamId, error: error.message });
+            streamTracker.endStream(streamId, {
+              bytesStreamed: totalBytes,
+              recordsProcessed: recordCount,
+              reason: 'error',
+              error: error.message
+            });
+            throw error;
           }
-
-          res.write('], "stream": true}');
-          res.end();
 
         } else {
           // Standard paginated response

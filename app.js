@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const config = require('./shared/config');
 const logger = require('./shared/logger');
+const streamTracker = require('./shared/stream-tracker');
 const AuthHandler = require('./middleware/auth-handler');
 const MemoryMonitor = require('./middleware/memory-monitor');
 const RequestQueue = require('./middleware/request-queue');
@@ -10,6 +11,7 @@ const PaginationHelper = require('./helpers/pagination-helper');
 const JSONOptimizer = require('./helpers/json-optimizer');
 const LogRotator = require('./monitoring/log-rotator');
 const PerformanceCollector = require('./monitoring/performance-collector');
+const PredictiveHealthMonitor = require('./monitoring/predictive-health-monitor');
 const AutoRestartManager = require('./monitoring/auto-restart');
 
 // Validate configuration
@@ -29,6 +31,7 @@ const paginationHelper = new PaginationHelper();
 const jsonOptimizer = new JSONOptimizer();
 const logRotator = new LogRotator();
 const performanceCollector = new PerformanceCollector();
+const predictiveHealthMonitor = new PredictiveHealthMonitor(performanceCollector);
 const autoRestart = new AutoRestartManager();
 
 // Connect monitoring systems
@@ -97,8 +100,7 @@ app.get('/monitoring/dashboard', async (req, res) => {
       performance: {
         ...snapshot.performance,
         streaming: {
-          activeStreams: 0, // TODO: track active streams
-          totalBytesStreamed: "∞ TB", // Because Pi power!
+          ...streamTracker.getStats(),
           compressionRatio: "99.9%"
         }
       },
@@ -115,6 +117,8 @@ app.get('/monitoring/dashboard', async (req, res) => {
           loadBalancing: "Round Robin Banana Distribution"
         }
       },
+      
+      predictiveHealth: predictiveHealthMonitor.getHealthPrediction(),
       
       bananaMetrics: {
         totalBananasEarned: "∞",
@@ -212,6 +216,25 @@ app.post('/monitoring/restart', async (req, res) => {
   setTimeout(() => {
     autoRestart.forceRestart(reason);
   }, 1000);
+});
+
+// Predictive health monitoring endpoint
+app.get('/monitoring/predictive-health', (req, res) => {
+  try {
+    const analysis = predictiveHealthMonitor.getDetailedAnalysis();
+    res.json({
+      success: true,
+      data: analysis,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Predictive health analysis error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate predictive health analysis',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // API connection test endpoint
@@ -443,39 +466,41 @@ app.use((req, res) => {
   });
 });
 
-// Start server
-const server = app.listen(config.server.port, () => {
-  logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌`);
-  logger.info(`Port: ${config.server.port}`);
-  logger.info(`Environment: ${config.server.env}`);
-  logger.info(`Mode: ${process.env.NODE_CLUSTER_WORKER ? '4-Core Beast Mode' : 'Single Core'}`);
-  logger.info('🚀 MAXIMUM BANANA ENDPOINTS:');
-  logger.info('  🏥 GET  /health - Health check');
-  logger.info('  🍌 GET  /monitoring/dashboard - MAXIMUM BANANA DASHBOARD');
-  logger.info('  📊 GET  /monitoring/metrics - Performance metrics');
-  logger.info('  📝 GET  /monitoring/logs - Log management');
-  logger.info('  🔄 POST /monitoring/logs/rotate - Force log rotation');
-  logger.info('  🚨 POST /monitoring/restart - Emergency banana restart');
-  logger.info('  🔗 GET  /api/test-connections - Test API connections');
+// Start server only if not being imported by tests
+if (require.main === module) {
+  const server = app.listen(config.server.port, () => {
+    logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌`);
+    logger.info(`Port: ${config.server.port}`);
+    logger.info(`Environment: ${config.server.env}`);
+    logger.info(`Mode: ${process.env.NODE_CLUSTER_WORKER ? '4-Core Beast Mode' : 'Single Core'}`);
+    logger.info('🚀 MAXIMUM BANANA ENDPOINTS:');
+    logger.info('  🏥 GET  /health - Health check');
+    logger.info('  🍌 GET  /monitoring/dashboard - MAXIMUM BANANA DASHBOARD');
+    logger.info('  📊 GET  /monitoring/metrics - Performance metrics');
+    logger.info('  📝 GET  /monitoring/logs - Log management');
+    logger.info('  🔄 POST /monitoring/logs/rotate - Force log rotation');
+    logger.info('  🚨 POST /monitoring/restart - Emergency banana restart');
+    logger.info('  🔗 GET  /api/test-connections - Test API connections');
   logger.info('  👥 GET  /api/hubspot/contacts - Get HubSpot contacts (streaming!)');
   logger.info('  ➕ POST /api/hubspot/contacts - Create HubSpot contact');
   logger.info('  🔍 POST /api/hubspot/search/:objectType - Search HubSpot objects');
   logger.info('  📊 POST /api/hubspot/graphql - HubSpot GraphQL (streaming!)');
-  logger.info('  🤖 POST /api/anthropic/messages - Send message to Claude');
-  logger.info('  🌐 ALL  /api/hubspot/* - Proxy to any HubSpot endpoint');
-  logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
-});
-
-// Set server for auto-restart manager
-autoRestart.setServer(server);
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    logger.info('Server closed');
-    process.exit(0);
+    logger.info('  🤖 POST /api/anthropic/messages - Send message to Claude');
+    logger.info('  🌐 ALL  /api/hubspot/* - Proxy to any HubSpot endpoint');
+    logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
   });
-});
+
+  // Set server for auto-restart manager
+  autoRestart.setServer(server);
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, shutting down gracefully');
+    server.close(() => {
+      logger.info('Server closed');
+      process.exit(0);
+    });
+  });
+}
 
 module.exports = app;
