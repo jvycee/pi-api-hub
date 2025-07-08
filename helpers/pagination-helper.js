@@ -25,12 +25,17 @@ class PaginationHelper {
     let totalRecords = 0;
     const startTime = Date.now();
 
+    // Bind this context to avoid issues in async generator
+    const buildQueryParams = this.buildQueryParams.bind(this);
+    const normalizeResult = this.normalizeResult.bind(this);
+    const maxLimit = this.maxLimit;
+
     return {
       async *[Symbol.asyncIterator]() {
         while (hasMore) {
           try {
-            const params = this.buildQueryParams({
-              limit: Math.min(limit, this.maxLimit),
+            const params = buildQueryParams({
+              limit: Math.min(limit, maxLimit),
               after,
               properties,
               associations,
@@ -46,7 +51,7 @@ class PaginationHelper {
                 filterGroups: filters.length > 0 ? [{ filters }] : [],
                 sorts,
                 properties,
-                limit: Math.min(limit, this.maxLimit)
+                limit: Math.min(limit, maxLimit)
               };
               
               if (after) searchPayload.after = after;
@@ -60,7 +65,7 @@ class PaginationHelper {
             
             // Yield each result individually for memory efficiency
             for (const result of results) {
-              yield this.normalizeResult(result);
+              yield normalizeResult(result);
               totalRecords++;
             }
 

@@ -7,6 +7,101 @@ class JSONOptimizer {
     this.maxArrayLength = options.maxArrayLength || 1000;
     this.maxObjectKeys = options.maxObjectKeys || 1000;
     this.preserveKeys = options.preserveKeys || ['id', 'name', 'email', 'createdAt', 'updatedAt'];
+    
+    // Adaptive chunk sizing configuration
+    this.baseChunkSize = options.baseChunkSize || 1024 * 1024; // 1MB default
+    this.minChunkSize = options.minChunkSize || 64 * 1024; // 64KB min
+    this.maxChunkSize = options.maxChunkSize || 5 * 1024 * 1024; // 5MB max
+    this.memoryThresholds = {
+      low: 0.5,    // 50% memory usage
+      medium: 0.7, // 70% memory usage
+      high: 0.85   // 85% memory usage
+    };
+    
+    // Performance tracking
+    this.performanceStats = {
+      chunkSizes: [],
+      memoryReadings: [],
+      optimizationTimes: []
+    };
+  }
+
+  // Calculate adaptive chunk size based on memory pressure
+  calculateAdaptiveChunkSize() {
+    const memoryUsage = process.memoryUsage();
+    const totalMemory = memoryUsage.heapTotal;
+    const usedMemory = memoryUsage.heapUsed;
+    const memoryPressure = usedMemory / totalMemory;
+    
+    // Get recent performance data
+    const recentChunkSizes = this.performanceStats.chunkSizes.slice(-10);
+    const recentMemoryReadings = this.performanceStats.memoryReadings.slice(-10);
+    
+    let adaptiveSize = this.baseChunkSize;
+    
+    // Adjust based on memory pressure
+    if (memoryPressure > this.memoryThresholds.high) {
+      // High memory pressure - reduce chunk size significantly
+      adaptiveSize = this.minChunkSize;
+      logger.warn('🍌 High memory pressure detected, reducing chunk size', {
+        memoryPressure: `${(memoryPressure * 100).toFixed(1)}%`,
+        chunkSize: `${(adaptiveSize / 1024).toFixed(0)}KB`
+      });
+    } else if (memoryPressure > this.memoryThresholds.medium) {
+      // Medium memory pressure - moderate reduction
+      adaptiveSize = this.baseChunkSize * 0.6;
+    } else if (memoryPressure < this.memoryThresholds.low) {
+      // Low memory pressure - can increase chunk size
+      adaptiveSize = Math.min(this.maxChunkSize, this.baseChunkSize * 1.5);
+    }
+    
+    // Consider historical performance
+    if (recentChunkSizes.length > 0) {
+      const avgChunkSize = recentChunkSizes.reduce((sum, size) => sum + size, 0) / recentChunkSizes.length;
+      const avgMemoryUsage = recentMemoryReadings.reduce((sum, mem) => sum + mem, 0) / recentMemoryReadings.length;
+      
+      // If recent chunks were processed efficiently, gradually increase size
+      if (avgMemoryUsage < this.memoryThresholds.medium && avgChunkSize < this.maxChunkSize) {
+        adaptiveSize = Math.min(this.maxChunkSize, avgChunkSize * 1.1);
+      }
+      
+      // If recent chunks caused memory issues, reduce size
+      if (avgMemoryUsage > this.memoryThresholds.high) {
+        adaptiveSize = Math.max(this.minChunkSize, avgChunkSize * 0.8);
+      }
+    }
+    
+    // Clamp to bounds
+    adaptiveSize = Math.max(this.minChunkSize, Math.min(this.maxChunkSize, adaptiveSize));
+    
+    // Track the decision
+    this.performanceStats.chunkSizes.push(adaptiveSize);
+    this.performanceStats.memoryReadings.push(memoryPressure);
+    
+    // Keep only recent data
+    if (this.performanceStats.chunkSizes.length > 100) {
+      this.performanceStats.chunkSizes = this.performanceStats.chunkSizes.slice(-50);
+      this.performanceStats.memoryReadings = this.performanceStats.memoryReadings.slice(-50);
+    }
+    
+    logger.debug('🍌 Adaptive chunk size calculated', {
+      memoryPressure: `${(memoryPressure * 100).toFixed(1)}%`,
+      chunkSize: `${(adaptiveSize / 1024).toFixed(0)}KB`,
+      trend: this.getChunkSizeTrend()
+    });
+    
+    return Math.round(adaptiveSize);
+  }
+  
+  // Get chunk size trend analysis
+  getChunkSizeTrend() {
+    const recent = this.performanceStats.chunkSizes.slice(-5);
+    if (recent.length < 3) return 'stable';
+    
+    const trend = recent.slice(-1)[0] - recent[0];
+    if (trend > recent[0] * 0.1) return 'increasing';
+    if (trend < -recent[0] * 0.1) return 'decreasing';
+    return 'stable';
   }
 
   // Optimize large JSON objects for Pi memory constraints
@@ -110,7 +205,7 @@ class JSONOptimizer {
     return optimized;
   }
 
-  // Stream-based JSON parsing for large responses
+  // Stream-based JSON parsing for large responses with adaptive chunking
   async parseStreamedJSON(stream) {
     return new Promise((resolve, reject) => {
       let buffer = '';
@@ -120,6 +215,9 @@ class JSONOptimizer {
       const objects = [];
       let currentObject = '';
       let startIndex = 0;
+      let bytesProcessed = 0;
+      let chunkCount = 0;
+      const startTime = Date.now();
 
       const processBuffer = () => {
         for (let i = startIndex; i < buffer.length; i++) {
@@ -174,12 +272,32 @@ class JSONOptimizer {
 
       stream.on('data', (chunk) => {
         buffer += chunk.toString();
+        bytesProcessed += chunk.length;
+        chunkCount++;
+        
         processBuffer();
         
+        // Use adaptive chunk sizing for buffer management
+        const adaptiveChunkSize = this.calculateAdaptiveChunkSize();
+        const bufferLimit = Math.max(adaptiveChunkSize * 3, 5 * 1024 * 1024); // At least 5MB
+        
         // Prevent buffer from growing too large
-        if (buffer.length > 10 * 1024 * 1024) { // 10MB limit
+        if (buffer.length > bufferLimit) {
           buffer = buffer.substring(startIndex);
           startIndex = 0;
+          
+          // Force garbage collection if available and memory pressure is high
+          const memoryUsage = process.memoryUsage();
+          const memoryPressure = memoryUsage.heapUsed / memoryUsage.heapTotal;
+          
+          if (global.gc && memoryPressure > this.memoryThresholds.medium) {
+            global.gc();
+            logger.debug('🍌 Forced garbage collection during JSON parsing', {
+              memoryPressure: `${(memoryPressure * 100).toFixed(1)}%`,
+              bufferSize: `${(buffer.length / 1024).toFixed(0)}KB`,
+              chunkCount
+            });
+          }
         }
       });
 
@@ -195,6 +313,23 @@ class JSONOptimizer {
           }
         }
         
+        // Track performance metrics
+        const totalTime = Date.now() - startTime;
+        this.performanceStats.optimizationTimes.push(totalTime);
+        
+        // Keep only recent optimization times
+        if (this.performanceStats.optimizationTimes.length > 100) {
+          this.performanceStats.optimizationTimes = this.performanceStats.optimizationTimes.slice(-50);
+        }
+        
+        logger.info('🍌 JSON stream parsing completed', {
+          objectsProcessed: objects.length,
+          bytesProcessed: `${(bytesProcessed / 1024).toFixed(0)}KB`,
+          chunksReceived: chunkCount,
+          processingTime: `${totalTime}ms`,
+          avgChunkSize: `${(bytesProcessed / chunkCount / 1024).toFixed(0)}KB`
+        });
+        
         resolve(objects);
       });
 
@@ -202,14 +337,16 @@ class JSONOptimizer {
     });
   }
 
-  // Memory-efficient JSON stringify
+  // Memory-efficient JSON stringify with adaptive chunking
   stringify(obj, options = {}) {
+    const adaptiveChunkSize = this.calculateAdaptiveChunkSize();
     const {
       maxMemory = 100 * 1024 * 1024, // 100MB
-      chunkSize = 1024 * 1024 // 1MB
+      chunkSize = adaptiveChunkSize
     } = options;
 
     let memoryUsed = 0;
+    const startTime = Date.now();
     
     const replacer = (key, value) => {
       if (value && typeof value === 'object') {
@@ -226,7 +363,20 @@ class JSONOptimizer {
 
     try {
       const optimized = this.optimizeObject(obj);
-      return JSON.stringify(optimized, replacer, 2);
+      const result = JSON.stringify(optimized, replacer, 2);
+      
+      // Track performance
+      const processingTime = Date.now() - startTime;
+      this.performanceStats.optimizationTimes.push(processingTime);
+      
+      logger.debug('🍌 JSON stringify completed', {
+        chunkSize: `${(chunkSize / 1024).toFixed(0)}KB`,
+        memoryUsed: `${(memoryUsed / 1024).toFixed(0)}KB`,
+        processingTime: `${processingTime}ms`,
+        resultSize: `${(result.length / 1024).toFixed(0)}KB`
+      });
+      
+      return result;
     } catch (error) {
       logger.error('JSON stringify error:', error);
       return JSON.stringify({
@@ -298,6 +448,47 @@ class JSONOptimizer {
     }
 
     return stats;
+  }
+  
+  // Get adaptive chunk sizing statistics
+  getAdaptiveStats() {
+    const recentChunks = this.performanceStats.chunkSizes.slice(-20);
+    const recentMemory = this.performanceStats.memoryReadings.slice(-20);
+    const recentTimes = this.performanceStats.optimizationTimes.slice(-20);
+    
+    const avgChunkSize = recentChunks.length > 0 
+      ? recentChunks.reduce((sum, size) => sum + size, 0) / recentChunks.length 
+      : this.baseChunkSize;
+    
+    const avgMemoryPressure = recentMemory.length > 0
+      ? recentMemory.reduce((sum, mem) => sum + mem, 0) / recentMemory.length
+      : 0;
+    
+    const avgOptimizationTime = recentTimes.length > 0
+      ? recentTimes.reduce((sum, time) => sum + time, 0) / recentTimes.length
+      : 0;
+    
+    return {
+      adaptive: {
+        currentChunkSize: `${(this.calculateAdaptiveChunkSize() / 1024).toFixed(0)}KB`,
+        avgChunkSize: `${(avgChunkSize / 1024).toFixed(0)}KB`,
+        baseChunkSize: `${(this.baseChunkSize / 1024).toFixed(0)}KB`,
+        minChunkSize: `${(this.minChunkSize / 1024).toFixed(0)}KB`,
+        maxChunkSize: `${(this.maxChunkSize / 1024).toFixed(0)}KB`,
+        trend: this.getChunkSizeTrend()
+      },
+      performance: {
+        avgMemoryPressure: `${(avgMemoryPressure * 100).toFixed(1)}%`,
+        avgOptimizationTime: `${avgOptimizationTime.toFixed(0)}ms`,
+        samplesCollected: recentChunks.length,
+        totalOptimizations: this.performanceStats.optimizationTimes.length
+      },
+      memoryThresholds: {
+        low: `${(this.memoryThresholds.low * 100).toFixed(0)}%`,
+        medium: `${(this.memoryThresholds.medium * 100).toFixed(0)}%`,
+        high: `${(this.memoryThresholds.high * 100).toFixed(0)}%`
+      }
+    };
   }
 }
 

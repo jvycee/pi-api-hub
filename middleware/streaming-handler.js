@@ -5,8 +5,25 @@ const streamTracker = require('../shared/stream-tracker');
 
 class StreamingHandler {
   constructor(options = {}) {
-    this.chunkSize = options.chunkSize || 1024 * 1024; // 1MB chunks
+    this.baseChunkSize = options.baseChunkSize || 1024 * 1024; // 1MB base chunks
     this.maxStreamSize = options.maxStreamSize || 100 * 1024 * 1024; // 100MB max
+    this.jsonOptimizer = options.jsonOptimizer || null; // Will be injected
+  }
+  
+  // Calculate adaptive chunk size based on memory pressure
+  getAdaptiveChunkSize() {
+    if (this.jsonOptimizer) {
+      return this.jsonOptimizer.calculateAdaptiveChunkSize();
+    }
+    
+    // Fallback calculation if no optimizer available
+    const memoryUsage = process.memoryUsage();
+    const memoryPressure = memoryUsage.heapUsed / memoryUsage.heapTotal;
+    
+    if (memoryPressure > 0.85) return 64 * 1024; // 64KB
+    if (memoryPressure > 0.7) return 512 * 1024; // 512KB
+    if (memoryPressure < 0.5) return 2 * 1024 * 1024; // 2MB
+    return this.baseChunkSize;
   }
 
   // Transform stream to handle large JSON responses

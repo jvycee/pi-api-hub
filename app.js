@@ -7,7 +7,13 @@ const AuthHandler = require('./middleware/auth-handler');
 const MemoryMonitor = require('./middleware/memory-monitor');
 const RequestQueue = require('./middleware/request-queue');
 const StreamingHandler = require('./middleware/streaming-handler');
+const CompressionMiddleware = require('./middleware/compression');
+const IntelligentCache = require('./middleware/intelligent-cache');
+const RequestDeduplicationBatcher = require('./middleware/request-deduplication');
+const WebhookHandler = require('./middleware/webhook-handler');
+const AIFallbackHandler = require('./middleware/ai-fallback-handler');
 const PaginationHelper = require('./helpers/pagination-helper');
+const CursorPagination = require('./helpers/cursor-pagination');
 const JSONOptimizer = require('./helpers/json-optimizer');
 const LogRotator = require('./monitoring/log-rotator');
 const PerformanceCollector = require('./monitoring/performance-collector');
@@ -26,9 +32,39 @@ const app = express();
 const authHandler = new AuthHandler();
 const memoryMonitor = new MemoryMonitor(config.performance.memoryThresholds);
 const requestQueue = new RequestQueue();
-const streamingHandler = new StreamingHandler();
-const paginationHelper = new PaginationHelper();
 const jsonOptimizer = new JSONOptimizer();
+const streamingHandler = new StreamingHandler({ jsonOptimizer });
+const compressionMiddleware = new CompressionMiddleware();
+const intelligentCache = new IntelligentCache({
+  maxSize: 5000,
+  defaultTTL: 300000, // 5 minutes
+  maxMemoryMB: 50,
+  analytics: true
+});
+const requestBatcher = new RequestDeduplicationBatcher({
+  batchSize: 5,
+  batchTimeout: 150, // 150ms
+  maxBatchWait: 2000, // 2 seconds
+  deduplicationTTL: 10000, // 10 seconds
+  enableBatching: true,
+  enableDeduplication: true
+});
+const webhookHandler = new WebhookHandler({
+  clientSecret: config.apis?.hubspot?.clientSecret,
+  validateSignature: true,
+  enableLogging: true,
+  enableAnalytics: true,
+  maxBodySize: 1024 * 1024 // 1MB
+});
+const aiHandler = new AIFallbackHandler({
+  anthropicApiKey: config.apis?.anthropic?.apiKey,
+  ollamaBaseUrl: 'http://10.0.0.218:11434', // Your Mac Mini
+  defaultModel: 'llama3.1:8b',
+  primaryProvider: 'ollama', // Ollama first, Claude for specialized tasks
+  enableFallback: true
+});
+const paginationHelper = new PaginationHelper();
+const cursorPagination = new CursorPagination();
 const logRotator = new LogRotator();
 const performanceCollector = new PerformanceCollector();
 const predictiveHealthMonitor = new PredictiveHealthMonitor(performanceCollector);
@@ -37,13 +73,28 @@ const autoRestart = new AutoRestartManager();
 // Connect monitoring systems
 autoRestart.setMonitors(performanceCollector, memoryMonitor);
 
+// Setup webhook handlers
+webhookHandler.setupDefaultHandlers();
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Limit JSON payload size
+app.use(compressionMiddleware.middleware());
 app.use(memoryMonitor.middleware());
 app.use(requestQueue.middleware());
 app.use(jsonOptimizer.middleware());
 app.use(performanceCollector.middleware());
+
+// Intelligent caching for API endpoints
+app.use('/api/hubspot/contacts', intelligentCache.middleware({
+  ttl: 180000, // 3 minutes for contacts
+  skipCache: (req) => req.method !== 'GET' // Only cache GET requests
+}));
+
+app.use('/api/hubspot/search', intelligentCache.middleware({
+  ttl: 120000, // 2 minutes for search results
+  skipCache: (req) => req.method !== 'POST' // Only cache POST requests
+}));
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -85,6 +136,10 @@ app.get('/monitoring/dashboard', async (req, res) => {
     const autoRestartStats = autoRestart.getStats();
     const logStats = await logRotator.getLogStats();
     const diskUsage = await logRotator.getDiskUsage();
+    const cacheStats = intelligentCache.getStats();
+    const batchingStats = requestBatcher.getStats();
+    const webhookStats = webhookHandler.getStats();
+    const aiStats = aiHandler.getStats();
     
     const dashboard = {
       title: "🍌 PI API HUB - MAXIMUM BANANA DASHBOARD 🍌",
@@ -102,7 +157,8 @@ app.get('/monitoring/dashboard', async (req, res) => {
         streaming: {
           ...streamTracker.getStats(),
           compressionRatio: "99.9%"
-        }
+        },
+        adaptiveChunking: jsonOptimizer.getAdaptiveStats()
       },
       
       apis: snapshot.apis,
@@ -111,10 +167,75 @@ app.get('/monitoring/dashboard', async (req, res) => {
         memory: memoryStatus,
         requestQueue: queueStatus,
         logging: logStats,
+        caching: {
+          enabled: true,
+          hitRate: cacheStats.hitRate,
+          memoryUsage: cacheStats.memoryUsageMB + "MB",
+          totalEntries: cacheStats.size,
+          avgResponseTime: cacheStats.avgResponseTime,
+          hotKeys: cacheStats.hotKeys.length,
+          popularEndpoints: cacheStats.popularEndpoints.length,
+          evictions: cacheStats.evictions,
+          intelligence: "🍌 MAXIMUM BANANA CACHING"
+        },
+        requestOptimization: {
+          enabled: true,
+          deduplicationRate: batchingStats.deduplicationRate,
+          batchingRate: batchingStats.batchingRate,
+          avgBatchSize: batchingStats.avgBatchSize,
+          avgBatchWaitTime: batchingStats.avgBatchWaitTime,
+          duplicatesSaved: batchingStats.duplicatesSaved,
+          activeBatches: batchingStats.activeBatches,
+          totalBatches: batchingStats.totalBatches,
+          intelligence: "🍌 SMART REQUEST BATCHING"
+        },
+        webhooks: {
+          enabled: true,
+          totalWebhooks: webhookStats.totalWebhooks,
+          successRate: webhookStats.successRate,
+          avgProcessingTime: webhookStats.avgProcessingTime,
+          eventTypes: webhookStats.eventTypes.length,
+          recentWebhooks: webhookStats.recentWebhooks.length,
+          invalidSignatures: webhookStats.invalidSignatures,
+          intelligence: "🍌 REAL-TIME WEBHOOK PROCESSING"
+        },
+        aiRouting: {
+          enabled: true,
+          primaryProvider: aiStats.primaryProvider,
+          totalRequests: aiStats.totalRequests,
+          anthropicUsage: aiStats.anthropicUsagePercent,
+          ollamaUsage: aiStats.ollamaUsagePercent,
+          specializationRate: aiStats.specializationRate,
+          fallbackTriggers: aiStats.fallbackTriggers,
+          costSavings: aiStats.costSavings.estimatedClaudeCostSaved,
+          savingsRate: aiStats.costSavings.savingsRate,
+          avgResponseTimes: {
+            anthropic: aiStats.avgResponseTimes.anthropic,
+            ollama: aiStats.avgResponseTimes.ollama
+          },
+          providers: {
+            anthropic: {
+              available: aiStats.providerStatus.anthropic.available,
+              outOfCredits: aiStats.providerStatus.anthropic.outOfCredits
+            },
+            ollama: {
+              available: aiStats.providerStatus.ollama.available,
+              modelCount: aiStats.providerStatus.ollama.modelCount
+            }
+          },
+          intelligence: "🍌 SMART AI ROUTING & COST OPTIMIZATION"
+        },
         clustering: {
-          mode: process.env.NODE_CLUSTER_WORKER ? "4-Core Beast Mode" : "Single Core",
+          mode: process.env.NODE_CLUSTER_WORKER ? "Dynamic Scaling Beast Mode" : "Single Core",
           workers: process.env.NODE_CLUSTER_WORKER ? 4 : 1,
-          loadBalancing: "Round Robin Banana Distribution"
+          loadBalancing: "Round Robin Banana Distribution",
+          dynamicScaling: process.env.NODE_CLUSTER_WORKER ? {
+            enabled: true,
+            minWorkers: 1,
+            maxWorkers: 4,
+            scaleUpThreshold: "80%",
+            scaleDownThreshold: "30%"
+          } : null
         }
       },
       
@@ -237,6 +358,450 @@ app.get('/monitoring/predictive-health', (req, res) => {
   }
 });
 
+// Cluster scaling information endpoint
+app.get('/monitoring/cluster-scaling', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        scalingEnabled: true,
+        currentMode: process.env.NODE_CLUSTER_WORKER ? "Dynamic Scaling" : "Single Process",
+        configuration: {
+          minWorkers: 1,
+          maxWorkers: 4,
+          scaleUpThreshold: "80%",
+          scaleDownThreshold: "30%",
+          cooldownPeriod: "60 seconds"
+        },
+        features: [
+          "🍌 CPU load-based scaling",
+          "🍌 Memory pressure monitoring", 
+          "🍌 Graceful worker shutdown",
+          "🍌 Scaling history tracking",
+          "🍌 Cooldown period protection"
+        ]
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Cluster scaling info error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get cluster scaling information',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Cache management endpoints
+// GET /monitoring/cache - Get cache statistics
+app.get('/monitoring/cache', (req, res) => {
+  try {
+    const stats = intelligentCache.getStats();
+    res.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Cache stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get cache statistics',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /monitoring/cache/clear - Clear cache
+app.post('/monitoring/cache/clear', (req, res) => {
+  try {
+    const entriesCleared = intelligentCache.clear();
+    res.json({
+      success: true,
+      message: 'Cache cleared successfully',
+      entriesCleared,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Cache clear error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear cache',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// GET /monitoring/cache/keys - Get cache keys with optional pattern
+app.get('/monitoring/cache/keys', (req, res) => {
+  try {
+    const { pattern } = req.query;
+    const keys = intelligentCache.getKeys(pattern);
+    res.json({
+      success: true,
+      data: {
+        keys,
+        count: keys.length,
+        pattern: pattern || 'all'
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Cache keys error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get cache keys',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// GET /monitoring/cache/warm - Warm cache with popular endpoints
+app.get('/monitoring/cache/warm', async (req, res) => {
+  try {
+    // Simple data provider that simulates warming popular endpoints
+    const dataProvider = async (endpoint) => {
+      // This is a placeholder - in real implementation you'd fetch actual data
+      // based on the endpoint pattern
+      return {
+        warmed: true,
+        endpoint,
+        timestamp: new Date().toISOString(),
+        data: `Warmed data for ${endpoint}`
+      };
+    };
+    
+    await intelligentCache.warmCache(dataProvider);
+    const stats = intelligentCache.getStats();
+    
+    res.json({
+      success: true,
+      message: 'Cache warming completed',
+      data: {
+        popularEndpoints: stats.popularEndpoints,
+        totalEntries: stats.size,
+        memoryUsage: stats.memoryUsageMB + 'MB'
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Cache warm error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to warm cache',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Request deduplication and batching endpoints
+// GET /monitoring/deduplication - Get deduplication statistics
+app.get('/monitoring/deduplication', (req, res) => {
+  try {
+    const stats = requestBatcher.getStats();
+    res.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Deduplication stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get deduplication statistics',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /monitoring/deduplication/flush - Flush all pending batches
+app.post('/monitoring/deduplication/flush', async (req, res) => {
+  try {
+    await requestBatcher.flushBatches();
+    res.json({
+      success: true,
+      message: 'All pending batches flushed successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Batch flush error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to flush batches',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /monitoring/deduplication/clear - Clear deduplication data
+app.post('/monitoring/deduplication/clear', (req, res) => {
+  try {
+    requestBatcher.clearDeduplication();
+    res.json({
+      success: true,
+      message: 'Deduplication data cleared successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Deduplication clear error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear deduplication data',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// GET /monitoring/deduplication/batches - Get active batch details
+app.get('/monitoring/deduplication/batches', (req, res) => {
+  try {
+    const batches = requestBatcher.getActiveBatches();
+    res.json({
+      success: true,
+      data: batches,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Active batches error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get active batch details',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// GET /monitoring/deduplication/duplicates - Get duplicate request details
+app.get('/monitoring/deduplication/duplicates', (req, res) => {
+  try {
+    const duplicates = requestBatcher.getDuplicateDetails();
+    res.json({
+      success: true,
+      data: duplicates,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Duplicate details error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get duplicate request details',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Webhook management endpoints
+// GET /monitoring/webhooks - Get webhook statistics
+app.get('/monitoring/webhooks', (req, res) => {
+  try {
+    const stats = webhookHandler.getStats();
+    res.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Webhook stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get webhook statistics',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// GET /monitoring/webhooks/handlers - Get registered handlers
+app.get('/monitoring/webhooks/handlers', (req, res) => {
+  try {
+    const handlers = webhookHandler.getHandlers();
+    res.json({
+      success: true,
+      data: handlers,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Webhook handlers error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get webhook handlers',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /monitoring/webhooks/clear - Clear webhook statistics
+app.post('/monitoring/webhooks/clear', (req, res) => {
+  try {
+    webhookHandler.clearStats();
+    res.json({
+      success: true,
+      message: 'Webhook statistics cleared successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Webhook clear error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear webhook statistics',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// GET /monitoring/webhooks/config - Get webhook configuration
+app.get('/monitoring/webhooks/config', (req, res) => {
+  try {
+    const config = webhookHandler.validateConfig();
+    const webhookUrl = webhookHandler.getWebhookUrl(`${req.protocol}://${req.get('host')}`);
+    
+    res.json({
+      success: true,
+      data: {
+        webhookUrl,
+        validation: config,
+        settings: {
+          validateSignature: webhookHandler.validateSignature,
+          enableLogging: webhookHandler.enableLogging,
+          enableAnalytics: webhookHandler.enableAnalytics,
+          maxBodySize: webhookHandler.maxBodySize,
+          retryAttempts: webhookHandler.retryAttempts
+        }
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Webhook config error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get webhook configuration',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// AI Routing management endpoints
+// GET /monitoring/ai - Get AI routing statistics
+app.get('/monitoring/ai', (req, res) => {
+  try {
+    const stats = aiHandler.getStats();
+    res.json({
+      success: true,
+      data: stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('AI stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get AI routing statistics',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /monitoring/ai/test - Test AI provider connectivity
+app.post('/monitoring/ai/test', async (req, res) => {
+  try {
+    const results = await aiHandler.testProviders();
+    res.json({
+      success: true,
+      data: results,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('AI provider test error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to test AI providers',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /monitoring/ai/refresh-ollama - Refresh Ollama connection
+app.post('/monitoring/ai/refresh-ollama', async (req, res) => {
+  try {
+    const success = await aiHandler.refreshOllamaConnection();
+    res.json({
+      success: true,
+      data: {
+        ollamaAvailable: success,
+        message: success ? 'Ollama connection refreshed successfully' : 'Ollama connection failed'
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Ollama refresh error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to refresh Ollama connection',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /monitoring/ai/reset-credits - Reset credit exhaustion flag
+app.post('/monitoring/ai/reset-credits', (req, res) => {
+  try {
+    aiHandler.resetCreditExhaustion();
+    res.json({
+      success: true,
+      message: 'Credit exhaustion flag reset successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Credit reset error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset credit exhaustion',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// POST /monitoring/ai/clear - Clear AI statistics
+app.post('/monitoring/ai/clear', (req, res) => {
+  try {
+    aiHandler.clearStats();
+    res.json({
+      success: true,
+      message: 'AI statistics cleared successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('AI stats clear error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear AI statistics',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// GET /monitoring/ai/models - Get available Ollama models
+app.get('/monitoring/ai/models', async (req, res) => {
+  try {
+    const models = await aiHandler.getOllamaModels();
+    res.json({
+      success: true,
+      data: {
+        models,
+        modelCount: models.length,
+        defaultModel: aiHandler.defaultModel
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Ollama models error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get Ollama models',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // API connection test endpoint
 app.get('/api/test-connections', async (req, res) => {
   try {
@@ -254,6 +819,11 @@ app.get('/api/test-connections', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   }
+});
+
+// HubSpot Webhook endpoint
+app.post('/webhooks/hubspot', webhookHandler.middleware(), (req, res) => {
+  // Response is handled by the middleware
 });
 
 // HubSpot proxy endpoints with streaming support
@@ -291,6 +861,43 @@ app.get('/api/hubspot/contacts', async (req, res) => {
     });
   } finally {
     monitor.end();
+  }
+});
+
+// HubSpot contacts cursor pagination endpoints
+app.get('/api/hubspot/contacts/cursor', async (req, res) => {
+  try {
+    logger.info('🍌 Cursor pagination endpoint reached', { query: req.query });
+    const handler = cursorPagination.createCursorHandler(
+      authHandler,
+      'contacts'
+    );
+    return await handler(req, res);
+  } catch (error) {
+    logger.error('Cursor pagination handler error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Cursor pagination handler failed',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/hubspot/contacts/cursor/stream', async (req, res) => {
+  try {
+    logger.info('🍌 Cursor streaming endpoint reached', { query: req.query });
+    const handler = cursorPagination.createStreamingCursorHandler(
+      authHandler,
+      'contacts'
+    );
+    return await handler(req, res);
+  } catch (error) {
+    logger.error('Cursor streaming handler error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Cursor streaming handler failed',
+      message: error.message
+    });
   }
 });
 
@@ -393,10 +1000,10 @@ app.post('/api/hubspot/graphql', async (req, res) => {
   }
 });
 
-// Anthropic proxy endpoint
+// AI endpoint with smart routing (Ollama primary, Claude for specialized tasks)
 app.post('/api/anthropic/messages', async (req, res) => {
   try {
-    const { model = 'claude-3-haiku-20240307', max_tokens = 1000, messages } = req.body;
+    const { model = 'claude-3-haiku-20240307', max_tokens = 1000, messages, taskType, forceClaude } = req.body;
     
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({
@@ -406,15 +1013,24 @@ app.post('/api/anthropic/messages', async (req, res) => {
       });
     }
 
-    const data = await authHandler.callAnthropic({
+    // Use AI Fallback Handler for smart routing
+    const aiResponse = await aiHandler.processAIRequest(messages, {
       model,
       max_tokens,
-      messages
+      taskType,
+      forceClaude
     });
 
     res.json({
       success: true,
-      data,
+      data: aiResponse.response,
+      metadata: {
+        provider: aiResponse.provider,
+        routingReason: aiResponse.routingReason,
+        responseTime: aiResponse.responseTime,
+        fallbackUsed: aiResponse.fallbackUsed || false,
+        costSavingMode: aiResponse.costSavingMode || false
+      },
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -466,8 +1082,8 @@ app.use((req, res) => {
   });
 });
 
-// Start server only if not being imported by tests
-if (require.main === module) {
+// Start server only if not being imported by tests or running as cluster worker
+if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
   const server = app.listen(config.server.port, () => {
     logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌`);
     logger.info(`Port: ${config.server.port}`);
@@ -485,13 +1101,28 @@ if (require.main === module) {
   logger.info('  ➕ POST /api/hubspot/contacts - Create HubSpot contact');
   logger.info('  🔍 POST /api/hubspot/search/:objectType - Search HubSpot objects');
   logger.info('  📊 POST /api/hubspot/graphql - HubSpot GraphQL (streaming!)');
-    logger.info('  🤖 POST /api/anthropic/messages - Send message to Claude');
+    logger.info('  🤖 POST /api/anthropic/messages - Smart AI routing (Ollama + Claude)');
     logger.info('  🌐 ALL  /api/hubspot/* - Proxy to any HubSpot endpoint');
+    logger.info('  🔗 POST /webhooks/hubspot - HubSpot webhooks receiver');
     logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
+    
+    // Log webhook URL for easy setup
+    const webhookUrl = `http://localhost:${config.server.port}/webhooks/hubspot`;
+    logger.info('🍌 WEBHOOK URL FOR HUBSPOT:', webhookUrl);
+    
+    // Log AI routing status
+    logger.info('🍌 AI ROUTING STATUS:');
+    logger.info(`  Primary Provider: ${aiHandler.primaryProvider}`);
+    logger.info(`  Ollama URL: ${aiHandler.ollamaBaseUrl}`);
+    logger.info(`  Fallback Enabled: ${aiHandler.enableFallback}`);
+    logger.info(`  Cost Optimization: Active`);
   });
 
   // Set server for auto-restart manager
   autoRestart.setServer(server);
+  
+  // Start adaptive compression monitoring
+  compressionMiddleware.startAdaptiveCompression();
 
   // Graceful shutdown
   process.on('SIGTERM', () => {
