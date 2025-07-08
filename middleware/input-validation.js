@@ -81,7 +81,7 @@ class InputValidationMiddleware {
     if (typeof str !== 'string') return null;
     
     const patterns = [
-      { name: 'SQL Injection', regex: /('|(\\')|(;)|(\\;)|(--)|(\s*(union|select|insert|update|delete|drop|create|alter|exec|execute)\s+)/gi },
+      { name: 'SQL Injection', regex: /(\'|\\\'|;|\\;|--|union\s+|select\s+|insert\s+|update\s+|delete\s+|drop\s+|create\s+|alter\s+|exec\s+|execute\s+)/gi },
       { name: 'XSS', regex: /(<script[^>]*>.*?<\/script>)|(<iframe[^>]*>.*?<\/iframe>)|(<object[^>]*>.*?<\/object>)/gi },
       { name: 'Path Traversal', regex: /(\.\.\/|\.\.\\|\/\.\.\/|\\\.\.\\)/g },
       { name: 'Command Injection', regex: /(\||;|&|`|\$\(|\$\{)/g },
