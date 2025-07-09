@@ -876,11 +876,11 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info('🍌 WEBHOOK URL FOR HUBSPOT:', webhookUrl);
     
     // Log AI routing status
-    logger.info('🍌 AI ROUTING STATUS:');
-    logger.info(`  Primary Provider: ${aiHandler.primaryProvider}`);
+    logger.info('🦙 FULL OLLAMA MODE ACTIVATED:');
+    logger.info(`  Primary Provider: ${aiHandler.primaryProvider} (MAXIMUM LOCAL AI)`);
     logger.info(`  Ollama URL: ${aiHandler.ollamaBaseUrl}`);
-    logger.info(`  Fallback Enabled: ${aiHandler.enableFallback}`);
-    logger.info(`  Cost Optimization: Active`);
+    logger.info(`  Fallback Enabled: ${aiHandler.enableFallback} (Emergency only)`);
+    logger.info(`  Cost Optimization: MAXIMUM (Local AI preferred)`);
   });
 
   // Set server for auto-restart manager

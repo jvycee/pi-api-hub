@@ -213,9 +213,14 @@ class AIFallbackHandler {
         prompt: prompt,
         stream: false,
         options: {
-          temperature: options.temperature || 0.7,
-          max_tokens: options.max_tokens || 1000,
-          top_p: options.top_p || 0.9
+          temperature: options.temperature || 0.3, // Lower temperature for more consistent results
+          max_tokens: options.max_tokens || 2000, // Increased for better responses
+          top_p: options.top_p || 0.9,
+          // 🦙 OLLAMA OPTIMIZATION
+          num_ctx: 4096, // Increased context window
+          num_predict: 2000, // Max tokens to predict
+          repeat_penalty: 1.1, // Reduce repetition
+          top_k: 40 // Top-k sampling
         }
       };
       
@@ -230,7 +235,7 @@ class AIFallbackHandler {
         headers: {
           'Content-Type': 'application/json'
         },
-        timeout: 60000 // Ollama can be slower
+        timeout: 120000 // 🦙 FULL OLLAMA MODE - Increased timeout for complex analysis
       });
       
       // Update success metrics
@@ -393,39 +398,38 @@ class AIFallbackHandler {
 
   // Analyze if request needs specialized Claude processing
   needsClaudeSpecialization(messages, options = {}) {
-    // Check for explicit task type
-    if (options.taskType && this.claudeSpecializedTasks.has(options.taskType)) {
-      return { needed: true, reason: `specialized_task:${options.taskType}` };
-    }
+    // 🦙 FULL OLLAMA MODE - Only use Claude for explicit requests or emergencies
     
-    // Check for force Claude flag
+    // Check for explicit force Claude flag
     if (options.forceClaude === true) {
       return { needed: true, reason: 'force_claude_requested' };
     }
     
-    // Analyze message content for complexity indicators
+    // Only use Claude for extremely specific tasks that require advanced reasoning
+    if (options.taskType === 'advanced_reasoning' || options.taskType === 'complex_analysis') {
+      return { needed: true, reason: `specialized_task:${options.taskType}` };
+    }
+    
+    // Check for emergency keywords that truly need Claude
     const content = this.extractContentFromMessages(messages);
     const contentLower = content.toLowerCase();
     
-    // Check for trigger keywords
-    for (const keyword of this.claudeTriggerKeywords) {
+    const emergencyKeywords = [
+      'emergency', 'critical security', 'vulnerability analysis', 'complex legal'
+    ];
+    
+    for (const keyword of emergencyKeywords) {
       if (contentLower.includes(keyword)) {
-        return { needed: true, reason: `keyword_trigger:${keyword}` };
+        return { needed: true, reason: `emergency_keyword:${keyword}` };
       }
     }
     
-    // Check for complexity indicators
-    const complexityScore = this.calculateComplexityScore(content);
-    if (complexityScore > 0.7) {
-      return { needed: true, reason: `high_complexity:${complexityScore.toFixed(2)}` };
-    }
+    // 🦙 EVERYTHING ELSE GOES TO OLLAMA - This is YOUR system, maximize local AI!
+    logger.info('🦙 FULL OLLAMA MODE - Routing to Ollama for maximum local AI usage', {
+      reason: 'ollama_preferred_mode'
+    });
     
-    // Check for code-related requests
-    if (this.isCodeRelated(content)) {
-      return { needed: true, reason: 'code_related_request' };
-    }
-    
-    return { needed: false, reason: 'standard_request' };
+    return { needed: false, reason: 'ollama_preferred_mode' };
   }
 
   // Extract text content from messages
