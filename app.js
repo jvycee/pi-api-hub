@@ -837,7 +837,7 @@ app.use((req, res) => {
 // Start server only if not being imported by tests or running as cluster worker
 if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
   const server = app.listen(config.server.port, () => {
-    logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌 (Auto-Deploy Test)`);
+    logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌 (GitHub Actions Test)`);
     logger.info(`Port: ${config.server.port}`);
     logger.info(`Environment: ${config.server.env}`);
     logger.info(`Mode: ${process.env.NODE_CLUSTER_WORKER ? '4-Core Beast Mode' : 'Single Core'}`);
