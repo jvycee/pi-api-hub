@@ -3,6 +3,8 @@ const cors = require('cors');
 const config = require('./shared/config');
 const logger = require('./shared/logger');
 const streamTracker = require('./shared/stream-tracker');
+const ResponseHelper = require('./shared/response-helper');
+const MonitoringFactory = require('./shared/monitoring-factory');
 const AuthHandler = require('./middleware/auth-handler');
 const MemoryMonitor = require('./middleware/memory-monitor');
 const RequestQueue = require('./middleware/request-queue');
@@ -297,65 +299,61 @@ app.get('/monitoring/dashboard', async (req, res) => {
   }
 });
 
-// Performance metrics endpoint
-app.get('/monitoring/metrics', (req, res) => {
-  const { timeRange = '1h', type } = req.query;
-  
-  if (type) {
-    const historicalData = performanceCollector.getHistoricalData(type, timeRange);
-    res.json({
-      type,
-      timeRange,
-      data: historicalData,
-      count: historicalData.length
-    });
-  } else {
-    const snapshot = performanceCollector.getSnapshot();
-    res.json(snapshot);
-  }
-});
-
-// Log management endpoint
-app.get('/monitoring/logs', async (req, res) => {
-  const logStats = await logRotator.getLogStats();
-  const diskUsage = await logRotator.getDiskUsage();
-  
-  res.json({
-    stats: logStats,
-    disk: diskUsage,
-    actions: {
-      forceRotation: "/monitoring/logs/rotate",
-      exportLogs: "/monitoring/logs/export"
+// Performance metrics endpoint - REFACTORED
+app.get('/monitoring/metrics', MonitoringFactory.createGetEndpoint(
+  (req) => {
+    const { timeRange = '1h', type } = req.query;
+    
+    if (type) {
+      const historicalData = performanceCollector.getHistoricalData(type, timeRange);
+      return {
+        type,
+        timeRange,
+        data: historicalData,
+        count: historicalData.length
+      };
+    } else {
+      return performanceCollector.getSnapshot();
     }
-  });
-});
+  },
+  { name: 'performance-metrics', errorMessage: 'Failed to get performance metrics' }
+));
 
-// Force log rotation
-app.post('/monitoring/logs/rotate', requireAdminAuth, async (req, res) => {
-  const { logFile } = req.body;
-  
-  try {
+// Log management endpoint - REFACTORED
+app.get('/monitoring/logs', MonitoringFactory.createGetEndpoint(
+  async () => {
+    const logStats = await logRotator.getLogStats();
+    const diskUsage = await logRotator.getDiskUsage();
+    
+    return {
+      stats: logStats,
+      disk: diskUsage,
+      actions: {
+        forceRotation: "/monitoring/logs/rotate",
+        exportLogs: "/monitoring/logs/export"
+      }
+    };
+  },
+  { name: 'log-management', errorMessage: 'Failed to get log management data' }
+));
+
+// Force log rotation - REFACTORED
+app.post('/monitoring/logs/rotate', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { logFile } = req.body;
     const success = await logRotator.forceRotation(logFile || 'combined.log');
     
-    if (success) {
-      res.json({
-        success: true,
-        message: `Log rotation completed for ${logFile || 'combined.log'}`,
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: "Log rotation failed"
-      });
+    if (!success) {
+      throw new Error("Log rotation failed");
     }
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
+    
+    return {
+      message: `Log rotation completed for ${logFile || 'combined.log'}`,
+      logFile: logFile || 'combined.log'
+    };
+  },
+  { name: 'log-rotation', errorMessage: 'Failed to rotate logs' }
+));
 
 // System restart endpoint (emergency banana button)
 app.post('/monitoring/restart', requireAdminAuth, async (req, res) => {
@@ -376,123 +374,40 @@ app.post('/monitoring/restart', requireAdminAuth, async (req, res) => {
   }, 1000);
 });
 
-// Predictive health monitoring endpoint
-app.get('/monitoring/predictive-health', (req, res) => {
-  try {
-    const analysis = predictiveHealthMonitor.getDetailedAnalysis();
-    res.json({
-      success: true,
-      data: analysis,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Predictive health analysis error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to generate predictive health analysis',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// Predictive health monitoring endpoint - REFACTORED
+app.get('/monitoring/predictive-health', MonitoringFactory.createGetEndpoint(
+  () => predictiveHealthMonitor.getDetailedAnalysis(),
+  { name: 'predictive-health', errorMessage: 'Failed to generate predictive health analysis' }
+));
 
-// Cluster scaling information endpoint
-app.get('/monitoring/cluster-scaling', (req, res) => {
-  try {
-    res.json({
-      success: true,
-      data: {
-        scalingEnabled: true,
-        currentMode: process.env.NODE_CLUSTER_WORKER ? "Dynamic Scaling" : "Single Process",
-        configuration: {
-          minWorkers: 1,
-          maxWorkers: 4,
-          scaleUpThreshold: "80%",
-          scaleDownThreshold: "30%",
-          cooldownPeriod: "60 seconds"
-        },
-        features: [
-          "🍌 CPU load-based scaling",
-          "🍌 Memory pressure monitoring", 
-          "🍌 Graceful worker shutdown",
-          "🍌 Scaling history tracking",
-          "🍌 Cooldown period protection"
-        ]
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Cluster scaling info error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get cluster scaling information',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// Cluster scaling information endpoint - REFACTORED
+app.get('/monitoring/cluster-scaling', MonitoringFactory.createGetEndpoint(
+  () => ({
+    scalingEnabled: true,
+    currentMode: process.env.NODE_CLUSTER_WORKER ? "Dynamic Scaling" : "Single Process",
+    configuration: {
+      minWorkers: 1,
+      maxWorkers: 4,
+      scaleUpThreshold: "80%",
+      scaleDownThreshold: "30%",
+      cooldownPeriod: "60 seconds"
+    },
+    features: [
+      "🍌 CPU load-based scaling",
+      "🍌 Memory pressure monitoring", 
+      "🍌 Graceful worker shutdown",
+      "🍌 Scaling history tracking",
+      "🍌 Cooldown period protection"
+    ]
+  }),
+  { name: 'cluster-scaling', errorMessage: 'Failed to get cluster scaling information' }
+));
 
-// Cache management endpoints
-// GET /monitoring/cache - Get cache statistics
-app.get('/monitoring/cache', (req, res) => {
-  try {
-    const stats = intelligentCache.getStats();
-    res.json({
-      success: true,
-      data: stats,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Cache stats error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get cache statistics',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// POST /monitoring/cache/clear - Clear cache
-app.post('/monitoring/cache/clear', requireAdminAuth, (req, res) => {
-  try {
-    const entriesCleared = intelligentCache.clear();
-    res.json({
-      success: true,
-      message: 'Cache cleared successfully',
-      entriesCleared,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Cache clear error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to clear cache',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// GET /monitoring/cache/keys - Get cache keys with optional pattern
-app.get('/monitoring/cache/keys', (req, res) => {
-  try {
-    const { pattern } = req.query;
-    const keys = intelligentCache.getKeys(pattern);
-    res.json({
-      success: true,
-      data: {
-        keys,
-        count: keys.length,
-        pattern: pattern || 'all'
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Cache keys error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get cache keys',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// Cache management endpoints - REFACTORED WITH MONITORING FACTORY
+const cacheEndpoints = MonitoringFactory.createCacheEndpoint(intelligentCache);
+app.get('/monitoring/cache', cacheEndpoints.getStats);
+app.post('/monitoring/cache/clear', requireAdminAuth, cacheEndpoints.clearCache);
+app.get('/monitoring/cache/keys', cacheEndpoints.getKeys);
 
 // GET /monitoring/cache/warm - Warm cache with popular endpoints
 app.get('/monitoring/cache/warm', async (req, res) => {
@@ -532,331 +447,131 @@ app.get('/monitoring/cache/warm', async (req, res) => {
   }
 });
 
-// Request deduplication and batching endpoints
-// GET /monitoring/deduplication - Get deduplication statistics
-app.get('/monitoring/deduplication', (req, res) => {
-  try {
-    const stats = requestBatcher.getStats();
-    res.json({
-      success: true,
-      data: stats,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Deduplication stats error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get deduplication statistics',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// Request deduplication and batching endpoints - REFACTORED
+app.get('/monitoring/deduplication', MonitoringFactory.createGetEndpoint(
+  () => requestBatcher.getStats(),
+  { name: 'deduplication-stats', errorMessage: 'Failed to get deduplication statistics' }
+));
 
-// POST /monitoring/deduplication/flush - Flush all pending batches
-app.post('/monitoring/deduplication/flush', requireAdminAuth, async (req, res) => {
-  try {
-    await requestBatcher.flushBatches();
-    res.json({
-      success: true,
-      message: 'All pending batches flushed successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Batch flush error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to flush batches',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// POST /monitoring/deduplication/flush - REFACTORED
+app.post('/monitoring/deduplication/flush', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async () => { await requestBatcher.flushBatches(); },
+  { name: 'deduplication-flush', successMessage: 'All pending batches flushed successfully', errorMessage: 'Failed to flush batches' }
+));
 
-// POST /monitoring/deduplication/clear - Clear deduplication data
-app.post('/monitoring/deduplication/clear', requireAdminAuth, (req, res) => {
-  try {
-    requestBatcher.clearDeduplication();
-    res.json({
-      success: true,
-      message: 'Deduplication data cleared successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Deduplication clear error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to clear deduplication data',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// POST /monitoring/deduplication/clear - REFACTORED
+app.post('/monitoring/deduplication/clear', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  () => { requestBatcher.clearDeduplication(); },
+  { name: 'deduplication-clear', successMessage: 'Deduplication data cleared successfully', errorMessage: 'Failed to clear deduplication data' }
+));
 
-// GET /monitoring/deduplication/batches - Get active batch details
-app.get('/monitoring/deduplication/batches', (req, res) => {
-  try {
-    const batches = requestBatcher.getActiveBatches();
-    res.json({
-      success: true,
-      data: batches,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Active batches error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get active batch details',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// GET /monitoring/deduplication/batches - REFACTORED
+app.get('/monitoring/deduplication/batches', MonitoringFactory.createGetEndpoint(
+  () => requestBatcher.getActiveBatches(),
+  { name: 'deduplication-batches', errorMessage: 'Failed to get active batch details' }
+));
 
 // GET /monitoring/deduplication/duplicates - Get duplicate request details
-app.get('/monitoring/deduplication/duplicates', (req, res) => {
-  try {
-    const duplicates = requestBatcher.getDuplicateDetails();
-    res.json({
-      success: true,
-      data: duplicates,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Duplicate details error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get duplicate request details',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+app.get('/monitoring/deduplication/duplicates', MonitoringFactory.createGetEndpoint(
+  () => requestBatcher.getDuplicateDetails(),
+  { name: 'deduplication-duplicates', errorMessage: 'Failed to get duplicate request details' }
+));
 
-// Webhook management endpoints
-// GET /monitoring/webhooks - Get webhook statistics
-app.get('/monitoring/webhooks', (req, res) => {
-  try {
-    const stats = webhookHandler.getStats();
-    res.json({
-      success: true,
-      data: stats,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Webhook stats error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get webhook statistics',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// GET /monitoring/webhooks/handlers - Get registered handlers
-app.get('/monitoring/webhooks/handlers', (req, res) => {
-  try {
-    const handlers = webhookHandler.getHandlers();
-    res.json({
-      success: true,
-      data: handlers,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Webhook handlers error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get webhook handlers',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// Webhook management endpoints - REFACTORED
+app.get('/monitoring/webhooks', MonitoringFactory.createGetEndpoint(
+  () => webhookHandler.getStats(),
+  { name: 'webhook-stats', errorMessage: 'Failed to get webhook statistics' }
+));
+app.get('/monitoring/webhooks/handlers', MonitoringFactory.createGetEndpoint(
+  () => webhookHandler.getHandlers(),
+  { name: 'webhook-handlers', errorMessage: 'Failed to get webhook handlers' }
+));
 
 // POST /monitoring/webhooks/clear - Clear webhook statistics
-app.post('/monitoring/webhooks/clear', requireAdminAuth, (req, res) => {
-  try {
-    webhookHandler.clearStats();
-    res.json({
-      success: true,
-      message: 'Webhook statistics cleared successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Webhook clear error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to clear webhook statistics',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+app.post('/monitoring/webhooks/clear', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  () => { webhookHandler.clearStats(); },
+  { name: 'webhook-clear', successMessage: 'Webhook statistics cleared successfully' }
+));
 
 // GET /monitoring/webhooks/config - Get webhook configuration
-app.get('/monitoring/webhooks/config', (req, res) => {
-  try {
+app.get('/monitoring/webhooks/config', MonitoringFactory.createGetEndpoint(
+  (req) => {
     const config = webhookHandler.validateConfig();
     const webhookUrl = webhookHandler.getWebhookUrl(`${req.protocol}://${req.get('host')}`);
     
-    res.json({
-      success: true,
-      data: {
-        webhookUrl,
-        validation: config,
-        settings: {
-          validateSignature: webhookHandler.validateSignature,
-          enableLogging: webhookHandler.enableLogging,
-          enableAnalytics: webhookHandler.enableAnalytics,
-          maxBodySize: webhookHandler.maxBodySize,
-          retryAttempts: webhookHandler.retryAttempts
-        }
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Webhook config error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get webhook configuration',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+    return {
+      webhookUrl,
+      validation: config,
+      settings: {
+        validateSignature: webhookHandler.validateSignature,
+        enableLogging: webhookHandler.enableLogging,
+        enableAnalytics: webhookHandler.enableAnalytics,
+        maxBodySize: webhookHandler.maxBodySize,
+        retryAttempts: webhookHandler.retryAttempts
+      }
+    };
+  },
+  { name: 'webhook-config', errorMessage: 'Failed to get webhook configuration' }
+));
 
 // AI Routing management endpoints
 // GET /monitoring/ai - Get AI routing statistics
-app.get('/monitoring/ai', (req, res) => {
-  try {
-    const stats = aiHandler.getStats();
-    res.json({
-      success: true,
-      data: stats,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('AI stats error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get AI routing statistics',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+app.get('/monitoring/ai', MonitoringFactory.createGetEndpoint(
+  () => aiHandler.getStats(),
+  { name: 'ai-stats', errorMessage: 'Failed to get AI routing statistics' }
+));
 
 // POST /monitoring/ai/test - Test AI provider connectivity
-app.post('/monitoring/ai/test', requireAdminAuth, async (req, res) => {
-  try {
-    const results = await aiHandler.testProviders();
-    res.json({
-      success: true,
-      data: results,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('AI provider test error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to test AI providers',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+app.post('/monitoring/ai/test', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  () => aiHandler.testProviders(),
+  { name: 'ai-test', errorMessage: 'Failed to test AI providers' }
+));
 
 // POST /monitoring/ai/refresh-ollama - Refresh Ollama connection
-app.post('/monitoring/ai/refresh-ollama', requireAdminAuth, async (req, res) => {
-  try {
+app.post('/monitoring/ai/refresh-ollama', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async () => {
     const success = await aiHandler.refreshOllamaConnection();
-    res.json({
-      success: true,
-      data: {
-        ollamaAvailable: success,
-        message: success ? 'Ollama connection refreshed successfully' : 'Ollama connection failed'
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Ollama refresh error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to refresh Ollama connection',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+    return {
+      ollamaAvailable: success,
+      message: success ? 'Ollama connection refreshed successfully' : 'Ollama connection failed'
+    };
+  },
+  { name: 'ai-refresh-ollama', errorMessage: 'Failed to refresh Ollama connection' }
+));
 
 // POST /monitoring/ai/reset-credits - Reset credit exhaustion flag
-app.post('/monitoring/ai/reset-credits', requireAdminAuth, (req, res) => {
-  try {
-    aiHandler.resetCreditExhaustion();
-    res.json({
-      success: true,
-      message: 'Credit exhaustion flag reset successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Credit reset error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to reset credit exhaustion',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+app.post('/monitoring/ai/reset-credits', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  () => { aiHandler.resetCreditExhaustion(); },
+  { name: 'ai-reset-credits', successMessage: 'Credit exhaustion flag reset successfully' }
+));
 
 // POST /monitoring/ai/clear - Clear AI statistics
-app.post('/monitoring/ai/clear', requireAdminAuth, (req, res) => {
-  try {
-    aiHandler.clearStats();
-    res.json({
-      success: true,
-      message: 'AI statistics cleared successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('AI stats clear error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to clear AI statistics',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+app.post('/monitoring/ai/clear', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  () => { aiHandler.clearStats(); },
+  { name: 'ai-clear', successMessage: 'AI statistics cleared successfully' }
+));
 
-// GET /monitoring/ai/models - Get available Ollama models
-app.get('/monitoring/ai/models', async (req, res) => {
-  try {
+// GET /monitoring/ai/models - REFACTORED
+app.get('/monitoring/ai/models', MonitoringFactory.createGetEndpoint(
+  async () => {
     const models = await aiHandler.getOllamaModels();
-    res.json({
-      success: true,
-      data: {
-        models,
-        modelCount: models.length,
-        defaultModel: aiHandler.defaultModel
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Ollama models error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get Ollama models',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+    return {
+      models,
+      modelCount: models.length,
+      defaultModel: aiHandler.defaultModel
+    };
+  },
+  { name: 'ai-models', errorMessage: 'Failed to get Ollama models' }
+));
 
-// API connection test endpoint
-app.get('/api/test-connections', async (req, res) => {
-  try {
+// API connection test endpoint - REFACTORED
+app.get('/api/test-connections', MonitoringFactory.createGetEndpoint(
+  async () => {
     const results = await authHandler.testConnections();
-    res.json({
-      success: true,
-      connections: results,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    logger.error('Connection test failed:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to test connections',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+    return { connections: results };
+  },
+  { name: 'connection-test', errorMessage: 'Failed to test connections' }
+));
 
 // HubSpot Webhook endpoint
 app.post('/webhooks/hubspot', webhookHandler.middleware(), (req, res) => {
