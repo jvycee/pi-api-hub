@@ -106,23 +106,23 @@ class SimpleBackupSystem {
     const backupId = this.generateBackupId();
     const backupPath = path.join(this.config.backupDir, `${backupId}.tar.gz`);
     
+    // Create tar command with compression (define outside try block)
+    const includeArgs = this.config.includePatterns.map(pattern => 
+      `--include='${pattern}'`
+    ).join(' ');
+    
+    const excludeArgs = this.config.excludePatterns.map(pattern => 
+      `--exclude='${pattern}'`
+    ).join(' ');
+    
+    const tarCommand = `tar -czf "${backupPath}" ${excludeArgs} ${includeArgs} --exclude-vcs .`;
+    
     try {
       logger.info('🍌 Creating backup...', {
         service: 'pi-api-hub',
         backupId,
         backupPath
       });
-      
-      // Create tar command with compression
-      const includeArgs = this.config.includePatterns.map(pattern => 
-        `--include='${pattern}'`
-      ).join(' ');
-      
-      const excludeArgs = this.config.excludePatterns.map(pattern => 
-        `--exclude='${pattern}'`
-      ).join(' ');
-      
-      const tarCommand = `tar -czf "${backupPath}" ${excludeArgs} ${includeArgs} --exclude-vcs .`;
       
       // Execute backup command
       const startTime = Date.now();
