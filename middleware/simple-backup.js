@@ -309,15 +309,21 @@ class SimpleBackupSystem {
   }
   
   async getBackupStats() {
-    return {
-      ...this.stats,
-      lastBackupAge: this.stats.lastBackupTime ? 
-        Date.now() - this.stats.lastBackupTime : null,
-      formattedLastBackupSize: this.formatBytes(this.stats.lastBackupSize),
-      formattedTotalBackupSize: this.formatBytes(this.stats.totalBackupSize),
-      isRunning: this.isRunning,
-      nextBackupTime: this.cronJob ? this.cronJob.nextDates(1)[0] : null
-    };
+    try {
+      return {
+        ...this.stats,
+        lastBackupAge: this.stats.lastBackupTime ? 
+          Date.now() - this.stats.lastBackupTime : null,
+        formattedLastBackupSize: this.formatBytes(this.stats.lastBackupSize),
+        formattedTotalBackupSize: this.formatBytes(this.stats.totalBackupSize),
+        isRunning: this.isRunning,
+        nextBackupTime: this.cronJob && this.isRunning ? 
+          (this.cronJob.nextDate ? this.cronJob.nextDate() : null) : null
+      };
+    } catch (error) {
+      logger.error('Error in getBackupStats:', error);
+      throw error;
+    }
   }
   
   async loadStats() {
