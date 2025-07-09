@@ -1,0 +1,38 @@
+{
+  "admin": {
+    "id": "admin",
+    "username": "admin",
+    "email": "admin@pi-api-hub.local",
+    "password": "$2b$10$fvAvmVD2NW88/.FFMGXBR.Ikfxg6gZPfvnDIN1d6ANrNGib8dmhtu",
+    "role": "admin",
+    "tenantId": "default",
+    "status": "active",
+    "mustChangePassword": false,
+    "createdAt": 1720559400000,
+    "updatedAt": 1720559400000
+  },
+  "demo_user": {
+    "id": "demo_user",
+    "username": "demo",
+    "email": "demo@pi-api-hub.local",
+    "password": "$2b$10$Of9xB/4QOkMbkUqgBy.1T.6j/6Wp540x7yZ.9bYmquW.5ff9mX0HW",
+    "role": "user",
+    "tenantId": "demo",
+    "status": "active",
+    "mustChangePassword": false,
+    "createdAt": 1720559400000,
+    "updatedAt": 1720559400000
+  },
+  "viewer_user": {
+    "id": "viewer_user",
+    "username": "viewer",
+    "email": "viewer@pi-api-hub.local",
+    "password": "$2b$10$fNUGZH2JtFMhmo6d5DTCaulVLoYk1uvzISRxpQEdK6GLJMp.1M4W6",
+    "role": "viewer",
+    "tenantId": "test",
+    "status": "active",
+    "mustChangePassword": false,
+    "createdAt": 1720559400000,
+    "updatedAt": 1720559400000
+  }
+}

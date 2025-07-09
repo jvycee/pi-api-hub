@@ -16,6 +16,7 @@ const WebhookHandler = require('./middleware/webhook-handler');
 const AIFallbackHandler = require('./middleware/ai-fallback-handler');
 // 🍌 Smart Banana Features
 const SimpleTenantManager = require('./middleware/simple-tenant');
+const SimpleAuth = require('./middleware/simple-auth');
 // Security middleware
 const AdminAuthMiddleware = require('./middleware/admin-auth');
 const SecurityHeadersMiddleware = require('./middleware/security-headers');
@@ -112,6 +113,9 @@ const enhancedAnalyticsDashboard = new EnhancedAnalyticsDashboard(advancedAnalyt
 
 // 🍌 SMART BANANA TENANT MANAGER 🍌
 const tenantManager = new SimpleTenantManager();
+
+// 🔐 SMART BANANA AUTHENTICATION 🔐
+const simpleAuth = new SimpleAuth();
 
 // Connect monitoring systems
 autoRestart.setMonitors(performanceCollector, memoryMonitor);
@@ -654,6 +658,154 @@ app.get('/admin/tenants/:tenantId', requireAdminAuth, MonitoringFactory.createGe
   { name: 'tenant-get', errorMessage: 'Failed to get tenant' }
 ));
 
+// 🔐 SMART BANANA AUTHENTICATION ENDPOINTS 🔐
+// POST /auth/login - User login
+app.post('/auth/login', MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { identifier, password, tenantId } = req.body;
+    
+    if (!identifier || !password) {
+      throw new Error('Username/email and password are required');
+    }
+    
+    const user = await simpleAuth.authenticateUser(identifier, password, tenantId || req.tenant?.id || 'default');
+    
+    if (!user) {
+      throw new Error('Invalid credentials');
+    }
+    
+    const accessToken = await simpleAuth.generateToken(user);
+    const refreshToken = simpleAuth.generateRefreshToken(user);
+    
+    return {
+      accessToken,
+      refreshToken,
+      user,
+      expiresIn: '24h'
+    };
+  },
+  { name: 'auth-login', successMessage: 'Login successful', errorMessage: 'Login failed' }
+));
+
+// POST /auth/refresh - Refresh JWT token
+app.post('/auth/refresh', MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      throw new Error('Refresh token is required');
+    }
+    
+    const result = await simpleAuth.refreshToken(refreshToken);
+    
+    if (!result) {
+      throw new Error('Invalid or expired refresh token');
+    }
+    
+    return result;
+  },
+  { name: 'auth-refresh', successMessage: 'Token refreshed successfully', errorMessage: 'Token refresh failed' }
+));
+
+// GET /auth/me - Get current user info
+app.get('/auth/me', simpleAuth.middleware(), MonitoringFactory.createGetEndpoint(
+  (req) => ({
+    user: req.user,
+    permissions: req.permissions,
+    authMethod: req.authMethod
+  }),
+  { name: 'auth-me', errorMessage: 'Failed to get user info' }
+));
+
+// POST /auth/logout - Logout (invalidate refresh token)
+app.post('/auth/logout', MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { refreshToken } = req.body;
+    
+    if (refreshToken) {
+      simpleAuth.refreshTokens.delete(refreshToken);
+    }
+    
+    return { message: 'Logout successful' };
+  },
+  { name: 'auth-logout', successMessage: 'Logout successful', errorMessage: 'Logout failed' }
+));
+
+// 🔐 USER MANAGEMENT ENDPOINTS (Admin only)
+// GET /admin/users - List users
+app.get('/admin/users', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createGetEndpoint(
+  (req) => ({
+    users: simpleAuth.listUsers(req.query.tenantId),
+    stats: simpleAuth.getAuthStats()
+  }),
+  { name: 'admin-users-list', errorMessage: 'Failed to get users' }
+));
+
+// POST /admin/users - Create new user
+app.post('/admin/users', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { username, email, password, role, tenantId } = req.body;
+    
+    if (!username || !email || !password) {
+      throw new Error('Username, email, and password are required');
+    }
+    
+    const user = await simpleAuth.createUser({
+      username,
+      email,
+      password,
+      role,
+      tenantId
+    });
+    
+    return { user };
+  },
+  { name: 'admin-users-create', successMessage: 'User created successfully', errorMessage: 'Failed to create user' }
+));
+
+// PUT /admin/users/:userId - Update user
+app.put('/admin/users/:userId', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { userId } = req.params;
+    const updates = req.body;
+    
+    const user = await simpleAuth.updateUser(userId, updates);
+    
+    return { user };
+  },
+  { name: 'admin-users-update', successMessage: 'User updated successfully', errorMessage: 'Failed to update user' }
+));
+
+// DELETE /admin/users/:userId - Delete user
+app.delete('/admin/users/:userId', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { userId } = req.params;
+    
+    await simpleAuth.deleteUser(userId);
+    
+    return { message: 'User deleted successfully' };
+  },
+  { name: 'admin-users-delete', successMessage: 'User deleted successfully', errorMessage: 'Failed to delete user' }
+));
+
+// POST /admin/users/:userId/api-keys - Generate API key for user
+app.post('/admin/users/:userId/api-keys', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { userId } = req.params;
+    const { name } = req.body;
+    
+    const user = simpleAuth.users.get(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    const apiKey = simpleAuth.generateApiKey(user, name);
+    
+    return { apiKey };
+  },
+  { name: 'admin-users-api-key', successMessage: 'API key generated successfully', errorMessage: 'Failed to generate API key' }
+));
+
 // API connection test endpoint - REFACTORED
 app.get('/api/test-connections', MonitoringFactory.createGetEndpoint(
   async () => {
@@ -957,6 +1109,14 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info('  ➕ POST /admin/tenants - Create new tenant');
     logger.info('  📝 PUT  /admin/tenants/:id - Update tenant');
     logger.info('  🔍 GET  /admin/tenants/:id - Get specific tenant');
+    logger.info('🔐 SMART BANANA AUTHENTICATION ENDPOINTS:');
+    logger.info('  🔑 POST /auth/login - User login');
+    logger.info('  🔄 POST /auth/refresh - Refresh JWT token');
+    logger.info('  👤 GET  /auth/me - Get current user info');
+    logger.info('  🚪 POST /auth/logout - Logout user');
+    logger.info('  👥 GET  /admin/users - List users (admin)');
+    logger.info('  ➕ POST /admin/users - Create user (admin)');
+    logger.info('  🔑 POST /admin/users/:id/api-keys - Generate API key');
     logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
     
     // Log webhook URL for easy setup
