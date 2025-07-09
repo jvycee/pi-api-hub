@@ -172,7 +172,9 @@ class SimpleBackupSystem {
       logger.error('🍌 Backup failed:', {
         service: 'pi-api-hub',
         backupId,
-        error: error.message
+        error: error.message,
+        stack: error.stack,
+        command: tarCommand
       });
       
       // Clean up failed backup file
