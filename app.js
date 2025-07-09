@@ -25,6 +25,8 @@ const LogRotator = require('./monitoring/log-rotator');
 const PerformanceCollector = require('./monitoring/performance-collector');
 const PredictiveHealthMonitor = require('./monitoring/predictive-health-monitor');
 const AutoRestartManager = require('./monitoring/auto-restart');
+const AnalyticsMiddleware = require('./middleware/analytics-middleware');
+const AnalyticsDashboard = require('./analytics/analytics-dashboard');
 
 // Validate configuration
 try {
@@ -87,6 +89,13 @@ const logRotator = new LogRotator();
 const performanceCollector = new PerformanceCollector();
 const predictiveHealthMonitor = new PredictiveHealthMonitor(performanceCollector);
 const autoRestart = new AutoRestartManager();
+const analyticsMiddleware = new AnalyticsMiddleware(aiHandler, {
+  maxHistorySize: 50000, // Pi 5 can handle more data
+  analysisWindow: 5 * 60 * 1000, // 5 minutes
+  enableRealTimeAnalysis: true,
+  analysisInterval: 30000 // 30 seconds
+});
+const analyticsDashboard = new AnalyticsDashboard(analyticsMiddleware);
 
 // Connect monitoring systems
 autoRestart.setMonitors(performanceCollector, memoryMonitor);
@@ -123,6 +132,7 @@ app.use(memoryMonitor.middleware());
 app.use(requestQueue.middleware());
 app.use(jsonOptimizer.middleware());
 app.use(performanceCollector.middleware());
+app.use(analyticsMiddleware.middleware());
 
 // Intelligent caching for API endpoints
 app.use('/api/hubspot/contacts', intelligentCache.middleware({
@@ -563,6 +573,9 @@ app.get('/monitoring/ai/models', MonitoringFactory.createGetEndpoint(
   },
   { name: 'ai-models', errorMessage: 'Failed to get Ollama models' }
 ));
+
+// 📊 ANALYTICS DASHBOARD ENDPOINTS 📊
+analyticsDashboard.createEndpoints(app, requireAdminAuth);
 
 // API connection test endpoint - REFACTORED
 app.get('/api/test-connections', MonitoringFactory.createGetEndpoint(
