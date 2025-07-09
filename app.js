@@ -17,6 +17,7 @@ const AIFallbackHandler = require('./middleware/ai-fallback-handler');
 // 🍌 Smart Banana Features
 const SimpleTenantManager = require('./middleware/simple-tenant');
 const SimpleAuth = require('./middleware/simple-auth');
+const SimpleBackupSystem = require('./middleware/simple-backup');
 // Security middleware
 const AdminAuthMiddleware = require('./middleware/admin-auth');
 const SecurityHeadersMiddleware = require('./middleware/security-headers');
@@ -116,6 +117,9 @@ const tenantManager = new SimpleTenantManager();
 
 // 🔐 SMART BANANA AUTHENTICATION 🔐
 const simpleAuth = new SimpleAuth();
+
+// 📦 SMART BANANA BACKUP SYSTEM 📦
+const backupSystem = new SimpleBackupSystem();
 
 // Connect monitoring systems
 autoRestart.setMonitors(performanceCollector, memoryMonitor);
@@ -806,6 +810,73 @@ app.post('/admin/users/:userId/api-keys', requireAdminAuth, simpleAuth.requirePe
   { name: 'admin-users-api-key', successMessage: 'API key generated successfully', errorMessage: 'Failed to generate API key' }
 ));
 
+// 📦 SMART BANANA BACKUP SYSTEM ENDPOINTS 📦
+// GET /admin/backups - List all backups
+app.get('/admin/backups', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  async () => {
+    const backups = await backupSystem.listBackups();
+    const stats = await backupSystem.getBackupStats();
+    
+    return {
+      backups,
+      stats
+    };
+  },
+  { name: 'backup-list', errorMessage: 'Failed to list backups' }
+));
+
+// POST /admin/backups - Create new backup
+app.post('/admin/backups', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async () => {
+    const backup = await backupSystem.createBackup();
+    
+    return { backup };
+  },
+  { name: 'backup-create', successMessage: 'Backup created successfully', errorMessage: 'Failed to create backup' }
+));
+
+// GET /admin/backups/stats - Get backup statistics
+app.get('/admin/backups/stats', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  async () => {
+    const stats = await backupSystem.getBackupStats();
+    
+    return { stats };
+  },
+  { name: 'backup-stats', errorMessage: 'Failed to get backup statistics' }
+));
+
+// POST /admin/backups/:backupId/restore - Restore backup
+app.post('/admin/backups/:backupId/restore', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { backupId } = req.params;
+    
+    const restoration = await backupSystem.restoreBackup(backupId);
+    
+    return { restoration };
+  },
+  { name: 'backup-restore', successMessage: 'Backup restored successfully', errorMessage: 'Failed to restore backup' }
+));
+
+// POST /admin/backups/schedule/stop - Stop backup scheduler
+app.post('/admin/backups/schedule/stop', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  () => {
+    backupSystem.stop();
+    
+    return { message: 'Backup scheduler stopped' };
+  },
+  { name: 'backup-schedule-stop', successMessage: 'Backup scheduler stopped', errorMessage: 'Failed to stop backup scheduler' }
+));
+
+// POST /admin/backups/schedule/start - Start backup scheduler
+app.post('/admin/backups/schedule/start', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  () => {
+    backupSystem.start();
+    
+    return { message: 'Backup scheduler started' };
+  },
+  { name: 'backup-schedule-start', successMessage: 'Backup scheduler started', errorMessage: 'Failed to start backup scheduler' }
+));
+
 // API connection test endpoint - REFACTORED
 app.get('/api/test-connections', MonitoringFactory.createGetEndpoint(
   async () => {
@@ -1117,6 +1188,13 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info('  👥 GET  /admin/users - List users (admin)');
     logger.info('  ➕ POST /admin/users - Create user (admin)');
     logger.info('  🔑 POST /admin/users/:id/api-keys - Generate API key');
+    logger.info('📦 SMART BANANA BACKUP SYSTEM ENDPOINTS:');
+    logger.info('  📋 GET  /admin/backups - List all backups');
+    logger.info('  ➕ POST /admin/backups - Create new backup');
+    logger.info('  📊 GET  /admin/backups/stats - Get backup statistics');
+    logger.info('  🔄 POST /admin/backups/:id/restore - Restore backup');
+    logger.info('  ⏹️  POST /admin/backups/schedule/stop - Stop scheduler');
+    logger.info('  ▶️  POST /admin/backups/schedule/start - Start scheduler');
     logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
     
     // Log webhook URL for easy setup
@@ -1137,6 +1215,19 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info(`  Active Tenants: ${tenantStats.activeTenants}`);
     logger.info(`  Default Tenant: ${tenantStats.defaultTenant}`);
     logger.info(`  Tenant Identification: Header/Subdomain/Path/Query`);
+    
+    // Log backup system status
+    logger.info('📦 SMART BANANA BACKUP SYSTEM:');
+    backupSystem.getBackupStats().then(backupStats => {
+      logger.info(`  Total Backups: ${backupStats.totalBackups}`);
+      logger.info(`  Successful Backups: ${backupStats.successfulBackups}`);
+      logger.info(`  Failed Backups: ${backupStats.failedBackups}`);
+      logger.info(`  Scheduler Status: ${backupStats.isRunning ? 'Running' : 'Stopped'}`);
+      logger.info(`  Last Backup: ${backupStats.lastBackupTime ? new Date(backupStats.lastBackupTime).toLocaleString() : 'Never'}`);
+      logger.info(`  Total Backup Size: ${backupStats.formattedTotalBackupSize}`);
+    }).catch(error => {
+      logger.warn('Failed to get backup stats:', error);
+    });
   });
 
   // Set server for auto-restart manager
