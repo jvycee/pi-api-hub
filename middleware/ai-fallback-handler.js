@@ -209,7 +209,7 @@ class AIFallbackHandler {
       const prompt = this.convertMessagesToPrompt(messages);
       
       const requestData = {
-        model: options.model || this.defaultModel,
+        model: this.defaultModel, // Always use Ollama model, not Anthropic model
         prompt: prompt,
         stream: false,
         options: {
