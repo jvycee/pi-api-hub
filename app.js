@@ -14,6 +14,8 @@ const IntelligentCache = require('./middleware/intelligent-cache');
 const RequestDeduplicationBatcher = require('./middleware/request-deduplication');
 const WebhookHandler = require('./middleware/webhook-handler');
 const AIFallbackHandler = require('./middleware/ai-fallback-handler');
+// 🍌 Smart Banana Features
+const SimpleTenantManager = require('./middleware/simple-tenant');
 // Security middleware
 const AdminAuthMiddleware = require('./middleware/admin-auth');
 const SecurityHeadersMiddleware = require('./middleware/security-headers');
@@ -108,6 +110,9 @@ const advancedAnalyticsEngine = new AdvancedAnalyticsEngine(analyticsMiddleware,
 });
 const enhancedAnalyticsDashboard = new EnhancedAnalyticsDashboard(advancedAnalyticsEngine);
 
+// 🍌 SMART BANANA TENANT MANAGER 🍌
+const tenantManager = new SimpleTenantManager();
+
 // Connect monitoring systems
 autoRestart.setMonitors(performanceCollector, memoryMonitor);
 
@@ -128,12 +133,15 @@ const requireAdminAuth = adminAuth?.middleware() || ((req, res, next) => {
 app.use(securityHeaders.middleware());
 app.use(inputValidation.middleware());
 
+// 🍌 Tenant identification (early in stack)
+app.use(tenantManager.middleware());
+
 // CORS with secure origins
 app.use(cors({
   origin: config.security?.corsOrigins || config.server?.corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key', 'x-tenant-id']
 }));
 
 // Standard middleware
@@ -591,6 +599,61 @@ analyticsDashboard.createEndpoints(app, requireAdminAuth);
 // 🍌 ENHANCED ANALYTICS DASHBOARD ENDPOINTS 🍌
 enhancedAnalyticsDashboard.createEndpoints(app, requireAdminAuth);
 
+// 🍌 SMART BANANA TENANT ENDPOINTS 🍌
+// GET /admin/tenants - List all tenants
+app.get('/admin/tenants', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => ({
+    tenants: tenantManager.listTenants(),
+    stats: tenantManager.getStats()
+  }),
+  { name: 'tenant-list', errorMessage: 'Failed to get tenant list' }
+));
+
+// POST /admin/tenants - Create new tenant
+app.post('/admin/tenants', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { tenantId, name, description, features, limits } = req.body;
+    
+    if (!tenantId || !name) {
+      throw new Error('tenantId and name are required');
+    }
+    
+    const config = await tenantManager.createTenant(tenantId, {
+      name,
+      description,
+      features,
+      limits
+    });
+    
+    return { tenant: config };
+  },
+  { name: 'tenant-create', successMessage: 'Tenant created successfully', errorMessage: 'Failed to create tenant' }
+));
+
+// PUT /admin/tenants/:tenantId - Update tenant
+app.put('/admin/tenants/:tenantId', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { tenantId } = req.params;
+    const updates = req.body;
+    
+    const config = await tenantManager.updateTenant(tenantId, updates);
+    
+    return { tenant: config };
+  },
+  { name: 'tenant-update', successMessage: 'Tenant updated successfully', errorMessage: 'Failed to update tenant' }
+));
+
+// GET /admin/tenants/:tenantId - Get specific tenant
+app.get('/admin/tenants/:tenantId', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  async (req) => {
+    const { tenantId } = req.params;
+    const config = await tenantManager.getTenantConfig(tenantId);
+    
+    return { tenant: config };
+  },
+  { name: 'tenant-get', errorMessage: 'Failed to get tenant' }
+));
+
 // API connection test endpoint - REFACTORED
 app.get('/api/test-connections', MonitoringFactory.createGetEndpoint(
   async () => {
@@ -889,6 +952,11 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info('  🚨 GET  /analytics/enhanced/degradation-report - Performance degradation');
     logger.info('  🔮 GET  /analytics/enhanced/predictions - Predictive analytics');
     logger.info('  📱 GET  /analytics/enhanced/overview - Comprehensive overview');
+    logger.info('🍌 SMART BANANA TENANT ENDPOINTS:');
+    logger.info('  🏢 GET  /admin/tenants - List all tenants');
+    logger.info('  ➕ POST /admin/tenants - Create new tenant');
+    logger.info('  📝 PUT  /admin/tenants/:id - Update tenant');
+    logger.info('  🔍 GET  /admin/tenants/:id - Get specific tenant');
     logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
     
     // Log webhook URL for easy setup
@@ -901,6 +969,14 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info(`  Ollama URL: ${aiHandler.ollamaBaseUrl}`);
     logger.info(`  Fallback Enabled: ${aiHandler.enableFallback} (Emergency only)`);
     logger.info(`  Cost Optimization: MAXIMUM (Local AI preferred)`);
+    
+    // Log tenant manager status
+    logger.info('🏢 SMART BANANA TENANT MANAGER:');
+    const tenantStats = tenantManager.getStats();
+    logger.info(`  Total Tenants: ${tenantStats.totalTenants}`);
+    logger.info(`  Active Tenants: ${tenantStats.activeTenants}`);
+    logger.info(`  Default Tenant: ${tenantStats.defaultTenant}`);
+    logger.info(`  Tenant Identification: Header/Subdomain/Path/Query`);
   });
 
   // Set server for auto-restart manager
