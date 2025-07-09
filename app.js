@@ -27,6 +27,8 @@ const PredictiveHealthMonitor = require('./monitoring/predictive-health-monitor'
 const AutoRestartManager = require('./monitoring/auto-restart');
 const AnalyticsMiddleware = require('./middleware/analytics-middleware');
 const AnalyticsDashboard = require('./analytics/analytics-dashboard');
+const AdvancedAnalyticsEngine = require('./analytics/advanced-analytics-engine');
+const EnhancedAnalyticsDashboard = require('./analytics/enhanced-analytics-dashboard');
 
 // Validate configuration
 try {
@@ -96,6 +98,15 @@ const analyticsMiddleware = new AnalyticsMiddleware(aiHandler, {
   analysisInterval: 30000 // 30 seconds
 });
 const analyticsDashboard = new AnalyticsDashboard(analyticsMiddleware);
+
+// 🍌 ADVANCED ANALYTICS ENGINE 🍌
+const advancedAnalyticsEngine = new AdvancedAnalyticsEngine(analyticsMiddleware, aiHandler, {
+  historicalDataRetention: 24 * 60 * 60 * 1000, // 24 hours
+  trendAnalysisWindow: 60 * 60 * 1000, // 1 hour
+  degradationThreshold: 0.25, // 25% degradation
+  realTimeUpdateInterval: 30000 // 30 seconds
+});
+const enhancedAnalyticsDashboard = new EnhancedAnalyticsDashboard(advancedAnalyticsEngine);
 
 // Connect monitoring systems
 autoRestart.setMonitors(performanceCollector, memoryMonitor);
@@ -577,6 +588,9 @@ app.get('/monitoring/ai/models', MonitoringFactory.createGetEndpoint(
 // 📊 ANALYTICS DASHBOARD ENDPOINTS 📊
 analyticsDashboard.createEndpoints(app, requireAdminAuth);
 
+// 🍌 ENHANCED ANALYTICS DASHBOARD ENDPOINTS 🍌
+enhancedAnalyticsDashboard.createEndpoints(app, requireAdminAuth);
+
 // API connection test endpoint - REFACTORED
 app.get('/api/test-connections', MonitoringFactory.createGetEndpoint(
   async () => {
@@ -869,6 +883,12 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info('  🤖 POST /api/anthropic/messages - Smart AI routing (Ollama + Claude)');
     logger.info('  🌐 ALL  /api/hubspot/* - Proxy to any HubSpot endpoint');
     logger.info('  🔗 POST /webhooks/hubspot - HubSpot webhooks receiver');
+    logger.info('🍌 ENHANCED ANALYTICS ENDPOINTS:');
+    logger.info('  📊 GET  /analytics/enhanced/realtime-dashboard - Real-time analytics');
+    logger.info('  📈 GET  /analytics/enhanced/trends - Historical trend analysis');
+    logger.info('  🚨 GET  /analytics/enhanced/degradation-report - Performance degradation');
+    logger.info('  🔮 GET  /analytics/enhanced/predictions - Predictive analytics');
+    logger.info('  📱 GET  /analytics/enhanced/overview - Comprehensive overview');
     logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
     
     // Log webhook URL for easy setup
