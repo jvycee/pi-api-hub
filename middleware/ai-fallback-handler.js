@@ -219,7 +219,14 @@ class AIFallbackHandler {
         }
       };
       
-      const response = await axios.post(`${this.ollamaBaseUrl}/api/generate`, requestData, {
+      const url = `${this.ollamaBaseUrl}/api/generate`;
+      logger.info('🍌 Ollama request details', {
+        url,
+        requestData: JSON.stringify(requestData),
+        service: 'pi-api-hub'
+      });
+      
+      const response = await axios.post(url, requestData, {
         headers: {
           'Content-Type': 'application/json'
         },
