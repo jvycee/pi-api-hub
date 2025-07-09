@@ -3,7 +3,7 @@ const logger = require('../shared/logger');
 
 class AutoRestartManager {
   constructor(options = {}) {
-    this.memoryThreshold = options.memoryThreshold || 7 * 1024 * 1024 * 1024; // 7GB
+    this.memoryThreshold = options.memoryThreshold || 7.5 * 1024 * 1024 * 1024; // 7.5GB - Pi 5 optimized
     this.cpuThreshold = options.cpuThreshold || 95; // 95%
     this.errorThreshold = options.errorThreshold || 50; // 50 errors per minute
     this.checkInterval = options.checkInterval || 30000; // 30 seconds

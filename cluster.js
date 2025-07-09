@@ -13,18 +13,18 @@ class ClusterManager {
     this.restartWindow = 60000; // 1 minute
     this.lastRestartTime = 0;
     
-    // Dynamic scaling configuration
-    this.minWorkers = Math.max(1, Math.floor(this.numCPUs * 0.25)); // 25% of CPUs minimum
+    // Dynamic scaling configuration - Pi 5 optimized
+    this.minWorkers = Math.max(2, Math.floor(this.numCPUs * 0.5)); // 50% of CPUs minimum (2 workers)
     this.maxWorkers = this.numCPUs; // All CPUs maximum
     this.targetWorkers = this.numCPUs; // Current target
     this.scalingEnabled = true;
     
-    // Load monitoring
+    // Load monitoring - Pi 5 optimized thresholds
     this.loadHistory = [];
     this.maxLoadHistorySize = 20; // Keep last 20 readings
     this.loadThresholds = {
-      scaleUp: 0.8,    // 80% load triggers scale up
-      scaleDown: 0.3,  // 30% load triggers scale down
+      scaleUp: 0.75,   // 75% load triggers scale up - more responsive
+      scaleDown: 0.35, // 35% load triggers scale down - more stable
       critical: 0.95   // 95% load is critical
     };
     
@@ -197,9 +197,9 @@ class ClusterManager {
         }
       }
       
-      // Check memory usage (per worker)
+      // Check memory usage (per worker) - Pi 5 optimized
       const memoryMB = stats.memory.rss / (1024 * 1024);
-      if (memoryMB > 1500) { // 1.5GB per worker on 8GB system
+      if (memoryMB > 2000) { // 2GB per worker on 8GB Pi 5 system
         logger.warn(`Worker ${stats.pid} using high memory: ${memoryMB.toFixed(2)}MB`);
       }
     });

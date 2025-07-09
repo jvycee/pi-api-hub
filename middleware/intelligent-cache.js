@@ -3,9 +3,9 @@ const { performance } = require('perf_hooks');
 
 class IntelligentCache {
   constructor(options = {}) {
-    this.maxSize = options.maxSize || 10000; // Maximum number of entries
+    this.maxSize = options.maxSize || 25000; // Maximum number of entries - Pi 5 can handle more!
     this.defaultTTL = options.defaultTTL || 300000; // 5 minutes default TTL
-    this.maxMemoryMB = options.maxMemoryMB || 100; // 100MB memory limit
+    this.maxMemoryMB = options.maxMemoryMB || 200; // 200MB memory limit - utilize 8GB Pi 5!
     this.cleanupInterval = options.cleanupInterval || 30000; // 30 seconds
     this.hitRateThreshold = options.hitRateThreshold || 0.3; // 30% hit rate threshold
     

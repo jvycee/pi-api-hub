@@ -35,11 +35,11 @@ const config = {
   },
 
   performance: {
-    maxResponseSize: parseInt(process.env.MAX_RESPONSE_SIZE) || 50 * 1024 * 1024, // 50MB max response
-    maxConcurrentRequests: parseInt(process.env.MAX_CONCURRENT_REQUESTS) || 10,
+    maxResponseSize: parseInt(process.env.MAX_RESPONSE_SIZE) || 100 * 1024 * 1024, // 100MB max response - Pi 5 can handle it!
+    maxConcurrentRequests: parseInt(process.env.MAX_CONCURRENT_REQUESTS) || 25, // 25 concurrent - unleash the Pi 5 power!
     memoryThresholds: {
-      warning: 6 * 1024 * 1024 * 1024, // 6GB
-      critical: 7 * 1024 * 1024 * 1024 // 7GB  
+      warning: parseInt(process.env.MEMORY_WARNING_THRESHOLD) || 7 * 1024 * 1024 * 1024, // 7GB - 87.5% of 8GB
+      critical: parseInt(process.env.MEMORY_CRITICAL_THRESHOLD) || 7.5 * 1024 * 1024 * 1024 // 7.5GB - 93.75% of 8GB  
     }
   },
 

@@ -40,9 +40,9 @@ const jsonOptimizer = new JSONOptimizer();
 const streamingHandler = new StreamingHandler({ jsonOptimizer });
 const compressionMiddleware = new CompressionMiddleware();
 const intelligentCache = new IntelligentCache({
-  maxSize: 5000,
+  maxSize: 25000, // Pi 5 can handle 5x more entries!
   defaultTTL: 300000, // 5 minutes
-  maxMemoryMB: 50,
+  maxMemoryMB: 200, // 4x more memory for Pi 5!
   analytics: true
 });
 const requestBatcher = new RequestDeduplicationBatcher({

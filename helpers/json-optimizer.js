@@ -8,10 +8,10 @@ class JSONOptimizer {
     this.maxObjectKeys = options.maxObjectKeys || 1000;
     this.preserveKeys = options.preserveKeys || ['id', 'name', 'email', 'createdAt', 'updatedAt'];
     
-    // Adaptive chunk sizing configuration
-    this.baseChunkSize = options.baseChunkSize || 1024 * 1024; // 1MB default
-    this.minChunkSize = options.minChunkSize || 64 * 1024; // 64KB min
-    this.maxChunkSize = options.maxChunkSize || 5 * 1024 * 1024; // 5MB max
+    // Adaptive chunk sizing configuration - Pi 5 SSD optimized
+    this.baseChunkSize = options.baseChunkSize || 2 * 1024 * 1024; // 2MB default - SSD sweet spot
+    this.minChunkSize = options.minChunkSize || 128 * 1024; // 128KB min - better for SSD
+    this.maxChunkSize = options.maxChunkSize || 10 * 1024 * 1024; // 10MB max - Pi 5 can handle it!
     this.memoryThresholds = {
       low: 0.5,    // 50% memory usage
       medium: 0.7, // 70% memory usage

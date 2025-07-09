@@ -1,17 +1,44 @@
 const axios = require('axios');
+const https = require('https');
+const http = require('http');
 const config = require('../shared/config');
 const logger = require('../shared/logger');
 
 class AuthHandler {
   constructor() {
+    // Pi 5 ethernet connection pooling agents
+    this.httpAgent = new http.Agent({
+      keepAlive: true,
+      maxSockets: 15,        // Pi 5 can handle more connections
+      maxFreeSockets: 8,     // Keep connections alive
+      timeout: 60000,
+      keepAliveMsecs: 30000  // 30 second keepalive
+    });
+
+    this.httpsAgent = new https.Agent({
+      keepAlive: true,
+      maxSockets: 15,        // Pi 5 optimized
+      maxFreeSockets: 8,     
+      timeout: 60000,
+      keepAliveMsecs: 30000
+    });
+
     this.hubspotClient = this.createHubSpotClient();
     this.anthropicClient = this.createAnthropicClient();
+    
+    logger.info('🍌 HTTP connection pooling initialized for Pi 5 ethernet', {
+      maxSockets: 15,
+      keepAlive: true,
+      keepAliveMsecs: 30000
+    });
   }
 
   createHubSpotClient() {
     return axios.create({
       baseURL: config.apis.hubspot.baseUrl,
       timeout: config.apis.hubspot.timeout,
+      httpAgent: this.httpAgent,
+      httpsAgent: this.httpsAgent,
       headers: {
         'Authorization': `Bearer ${config.apis.hubspot.apiKey}`,
         'Content-Type': 'application/json'
@@ -23,6 +50,8 @@ class AuthHandler {
     return axios.create({
       baseURL: config.apis.anthropic.baseUrl,
       timeout: config.apis.anthropic.timeout,
+      httpAgent: this.httpAgent,
+      httpsAgent: this.httpsAgent,
       headers: {
         'x-api-key': config.apis.anthropic.apiKey,
         'content-type': 'application/json',
