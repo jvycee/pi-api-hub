@@ -274,7 +274,7 @@ async function runFullTest() {
     log('yellow', 'Please check:');
     log('yellow', '1. Ollama is running on the Pi');
     log('yellow', '2. OLLAMA_BASE_URL is correct');
-    log('yellow', '3. The model is downloaded (llama3.1:8b)');
+    log('yellow', '3. The model is downloaded (llama3.2:latest)');
     return;
   }
   

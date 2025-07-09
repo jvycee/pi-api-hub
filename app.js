@@ -67,7 +67,7 @@ const webhookHandler = new WebhookHandler({
 const aiHandler = new AIFallbackHandler({
   anthropicApiKey: config.apis?.anthropic?.apiKey,
   ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'http://10.0.0.218:11434',
-  defaultModel: 'llama3.1:8b',
+  defaultModel: 'llama3.2:latest',
   primaryProvider: 'ollama', // Ollama first, Claude for specialized tasks
   enableFallback: true
 });
