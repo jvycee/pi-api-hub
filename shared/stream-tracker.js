@@ -8,87 +8,128 @@ class StreamTracker extends EventEmitter {
     this.totalStreams = 0;
     this.totalBytesStreamed = 0;
     this.peakConcurrentStreams = 0;
-  }
-
-  // Start tracking a new stream
-  startStream(streamId, metadata = {}) {
-    const streamInfo = {
-      id: streamId,
-      startTime: Date.now(),
-      bytesStreamed: 0,
-      type: metadata.type || 'unknown',
-      endpoint: metadata.endpoint || 'unknown',
-      clientIp: metadata.clientIp || 'unknown',
-      ...metadata
-    };
-
-    this.activeStreams.set(streamId, streamInfo);
-    this.totalStreams++;
     
-    // Update peak concurrent streams
-    const currentActive = this.activeStreams.size;
-    if (currentActive > this.peakConcurrentStreams) {
-      this.peakConcurrentStreams = currentActive;
-    }
+    // Mutex for thread-safe operations
+    this._operationQueue = [];
+    this._processing = false;
+  }
 
-    logger.info('🍌 Stream started', {
-      streamId,
-      activeStreams: currentActive,
-      totalStreams: this.totalStreams,
-      type: streamInfo.type,
-      endpoint: streamInfo.endpoint
+  // Thread-safe operation wrapper
+  async _atomicOperation(operation) {
+    return new Promise((resolve, reject) => {
+      this._operationQueue.push({ operation, resolve, reject });
+      this._processQueue();
     });
-
-    this.emit('streamStarted', streamInfo);
-    return streamInfo;
   }
 
-  // Update stream progress
-  updateStreamProgress(streamId, bytesStreamed, metadata = {}) {
-    const streamInfo = this.activeStreams.get(streamId);
-    if (streamInfo) {
-      streamInfo.bytesStreamed = bytesStreamed;
-      streamInfo.lastUpdate = Date.now();
-      
-      // Update any additional metadata
-      Object.assign(streamInfo, metadata);
-      
-      this.emit('streamProgress', streamInfo);
+  _processQueue() {
+    if (this._processing || this._operationQueue.length === 0) {
+      return;
+    }
+
+    this._processing = true;
+    const { operation, resolve, reject } = this._operationQueue.shift();
+
+    try {
+      const result = operation();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      this._processing = false;
+      // Process next operation in queue
+      setImmediate(() => this._processQueue());
     }
   }
 
-  // End stream tracking
-  endStream(streamId, finalStats = {}) {
-    const streamInfo = this.activeStreams.get(streamId);
-    if (streamInfo) {
-      const endTime = Date.now();
-      const duration = endTime - streamInfo.startTime;
-      const finalBytes = finalStats.bytesStreamed || streamInfo.bytesStreamed;
-      
-      // Add to total bytes streamed
-      this.totalBytesStreamed += finalBytes;
-      
-      const finalStreamInfo = {
-        ...streamInfo,
-        endTime,
-        duration,
-        bytesStreamed: finalBytes,
-        ...finalStats
+  // Start tracking a new stream (thread-safe)
+  async startStream(streamId, metadata = {}) {
+    return this._atomicOperation(() => {
+      const streamInfo = {
+        id: streamId,
+        startTime: Date.now(),
+        bytesStreamed: 0,
+        type: metadata.type || 'unknown',
+        endpoint: metadata.endpoint || 'unknown',
+        clientIp: metadata.clientIp || 'unknown',
+        ...metadata
       };
 
-      this.activeStreams.delete(streamId);
+      this.activeStreams.set(streamId, streamInfo);
+      this.totalStreams++;
+      
+      // Update peak concurrent streams
+      const currentActive = this.activeStreams.size;
+      if (currentActive > this.peakConcurrentStreams) {
+        this.peakConcurrentStreams = currentActive;
+      }
 
-      logger.info('🍌 Stream completed', {
+      logger.info('🍌 Stream started', {
         streamId,
-        duration: `${duration}ms`,
-        bytesStreamed: this.formatBytes(finalBytes),
-        activeStreams: this.activeStreams.size,
-        totalBytesStreamed: this.formatBytes(this.totalBytesStreamed)
+        activeStreams: currentActive,
+        totalStreams: this.totalStreams,
+        type: streamInfo.type,
+        endpoint: streamInfo.endpoint
       });
 
-      this.emit('streamEnded', finalStreamInfo);
-      return finalStreamInfo;
-    }
+      this.emit('streamStarted', streamInfo);
+      return streamInfo;
+    });
+  }
+
+  // Update stream progress (thread-safe)
+  async updateStreamProgress(streamId, bytesStreamed, metadata = {}) {
+    return this._atomicOperation(() => {
+      const streamInfo = this.activeStreams.get(streamId);
+      if (streamInfo) {
+        streamInfo.bytesStreamed = bytesStreamed;
+        streamInfo.lastUpdate = Date.now();
+        
+        // Update any additional metadata
+        Object.assign(streamInfo, metadata);
+        
+        this.emit('streamProgress', streamInfo);
+        return streamInfo;
+      }
+      return null;
+    });
+  }
+
+  // End stream tracking (thread-safe)
+  async endStream(streamId, finalStats = {}) {
+    return this._atomicOperation(() => {
+      const streamInfo = this.activeStreams.get(streamId);
+      if (streamInfo) {
+        const endTime = Date.now();
+        const duration = endTime - streamInfo.startTime;
+        const finalBytes = finalStats.bytesStreamed || streamInfo.bytesStreamed;
+        
+        // Add to total bytes streamed
+        this.totalBytesStreamed += finalBytes;
+        
+        const finalStreamInfo = {
+          ...streamInfo,
+          endTime,
+          duration,
+          bytesStreamed: finalBytes,
+          ...finalStats
+        };
+
+        this.activeStreams.delete(streamId);
+
+        logger.info('🍌 Stream completed', {
+          streamId,
+          duration: `${duration}ms`,
+          bytesStreamed: this.formatBytes(finalBytes),
+          activeStreams: this.activeStreams.size,
+          totalBytesStreamed: this.formatBytes(this.totalBytesStreamed)
+        });
+
+        this.emit('streamEnded', finalStreamInfo);
+        return finalStreamInfo;
+      }
+      return null;
+    });
   }
 
   // Get current stream statistics

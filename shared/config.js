@@ -1,13 +1,15 @@
 require('dotenv').config();
 
+// Shared CORS configuration - single source of truth
+const corsOrigins = process.env.CORS_ORIGINS ? 
+  process.env.CORS_ORIGINS.split(',').map(origin => origin.trim()) : 
+  (process.env.NODE_ENV === 'production' ? ['https://your-domain.com'] : ['http://localhost:3000']);
+
 const config = {
   server: {
     port: parseInt(process.env.PORT) || 3000,
     mcpPort: parseInt(process.env.MCP_PORT) || 3001,
-    env: process.env.NODE_ENV || 'development',
-    corsOrigins: process.env.CORS_ORIGINS ? 
-      process.env.CORS_ORIGINS.split(',').map(origin => origin.trim()) : 
-      (process.env.NODE_ENV === 'production' ? ['https://your-domain.com'] : ['http://localhost:3000'])
+    env: process.env.NODE_ENV || 'development'
   },
   
   apis: {
@@ -45,16 +47,16 @@ const config = {
 
   security: {
     adminApiKey: process.env.ADMIN_API_KEY,
-    corsOrigins: process.env.CORS_ORIGINS ? 
-      process.env.CORS_ORIGINS.split(',').map(origin => origin.trim()) : 
-      (process.env.NODE_ENV === 'production' ? ['https://your-domain.com'] : ['http://localhost:3000']),
     enableSecurityHeaders: process.env.ENABLE_SECURITY_HEADERS !== 'false',
     enableInputValidation: process.env.ENABLE_INPUT_VALIDATION !== 'false',
     rateLimitAdmin: {
       windowMs: parseInt(process.env.ADMIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
       max: parseInt(process.env.ADMIN_RATE_LIMIT_MAX_REQUESTS) || 10 // Very restrictive for admin
     }
-  }
+  },
+
+  // Shared CORS origins used throughout the application
+  corsOrigins
 };
 
 // Validation
