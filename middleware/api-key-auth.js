@@ -57,6 +57,12 @@ class APIKeyAuth {
     // Admin tier key
     this.createAPIKey('admin-user', 'admin', 'Admin access for management');
     
+    // Log the actual keys for initial setup (remove this in production!)
+    const adminKeys = this.getKeysByTier('admin');
+    if (adminKeys.length > 0) {
+      logger.info('🍌 ADMIN API KEY FOR SETUP:', adminKeys[0].key.replace('...', ''));
+    }
+    
     logger.info('🍌 Default API keys created', {
       basic: this.getKeysByTier('basic').length,
       premium: this.getKeysByTier('premium').length,
@@ -85,6 +91,11 @@ class APIKeyAuth {
       lastRequestTime: null,
       minuteStartTime: Date.now()
     });
+    
+    // Log full key for admin during setup (remove in production!)
+    if (tier === 'admin') {
+      logger.info('🍌 ADMIN API KEY FOR SETUP:', apiKey);
+    }
     
     logger.info('🍌 New API key created', {
       name,
