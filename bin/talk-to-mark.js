@@ -24,6 +24,70 @@ class MarkChat {
     };
     
     console.log(chalk.yellow('🐐 Initializing connection to Mark on your Pi...'));
+    this.runDiagnostics();
+  }
+
+  async runDiagnostics() {
+    console.log(chalk.yellow('🐐 Running diagnostics...'));
+    
+    const diagnostics = {
+      piApiHub: false,
+      aiConnectivity: false,
+      commands: {
+        status: false,
+        test: false,
+        webhook: false,
+        security: false
+      }
+    };
+
+    // Test Pi API Hub health
+    try {
+      const healthResponse = await axios.get(`${this.piApiUrl}/health`, { timeout: 5000 });
+      if (healthResponse.data.status === 'healthy') {
+        diagnostics.piApiHub = true;
+        console.log(chalk.green('✅ Pi API Hub: Healthy'));
+      } else {
+        console.log(chalk.red('❌ Pi API Hub: Unhealthy'));
+      }
+    } catch (error) {
+      console.log(chalk.red('❌ Pi API Hub: Connection failed'));
+    }
+
+    // Test AI connectivity with simple message
+    try {
+      const testResponse = await axios.post(`${this.piApiUrl}/api/anthropic/messages`, {
+        model: 'llama3.2:latest',
+        max_tokens: 50,
+        system: 'You are a test assistant. Respond with exactly "TEST_SUCCESS" and nothing else.',
+        messages: [{ role: 'user', content: 'test' }]
+      }, { timeout: 10000 });
+      
+      if (testResponse.data && testResponse.data.data) {
+        diagnostics.aiConnectivity = true;
+        console.log(chalk.green('✅ AI Connectivity: Working'));
+      } else {
+        console.log(chalk.red('❌ AI Connectivity: Invalid response'));
+      }
+    } catch (error) {
+      console.log(chalk.red('❌ AI Connectivity: Failed'));
+    }
+
+    // Test specific commands
+    diagnostics.commands.status = diagnostics.piApiHub; // Status command depends on health endpoint
+    diagnostics.commands.test = diagnostics.aiConnectivity; // Test commands depend on AI
+    diagnostics.commands.webhook = diagnostics.aiConnectivity;
+    diagnostics.commands.security = diagnostics.aiConnectivity;
+
+    // Summary
+    const allGood = diagnostics.piApiHub && diagnostics.aiConnectivity;
+    if (allGood) {
+      console.log(chalk.green('🎉 All diagnostics passed! Mark is ready to help!'));
+    } else {
+      console.log(chalk.yellow('⚠️  Some diagnostics failed. Mark may have limited functionality.'));
+    }
+    
+    console.log('');
     this.initializeInterface();
   }
 
