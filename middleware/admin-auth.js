@@ -1,11 +1,12 @@
 const crypto = require('crypto');
 const logger = require('../shared/logger');
+const SecureSessionStorage = require('./secure-session-storage');
 
 class AdminAuthMiddleware {
   constructor(options = {}) {
     this.adminApiKey = process.env.ADMIN_API_KEY;
     this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
-    this.activeSessions = new Map(); // In production, use Redis
+    this.sessionStorage = new SecureSessionStorage({ sessionTimeout: this.sessionTimeout });
     this.rateLimiter = new Map(); // Track failed attempts
     this.maxAttempts = options.maxAttempts || 5;
     this.lockoutTime = options.lockoutTime || 15 * 60 * 1000; // 15 minutes
@@ -54,7 +55,7 @@ class AdminAuthMiddleware {
   }
 
   // Authenticate admin request
-  authenticate(req, res, next) {
+  async authenticate(req, res, next) {
     const ip = req.ip || req.connection.remoteAddress;
     
     // Check rate limiting first
@@ -108,7 +109,7 @@ class AdminAuthMiddleware {
     
     // Generate and store session token for this request
     const sessionToken = this.generateSessionToken();
-    this.activeSessions.set(sessionToken, {
+    await this.sessionStorage.createSession(sessionToken, {
       ip,
       createdAt: Date.now(),
       lastUsed: Date.now()
@@ -128,26 +129,25 @@ class AdminAuthMiddleware {
   // Middleware function
   middleware() {
     return (req, res, next) => {
-      this.authenticate(req, res, next);
+      this.authenticate(req, res, next).catch(next);
     };
   }
 
   // Clean up expired sessions
-  cleanupSessions() {
-    const now = Date.now();
-    for (const [token, session] of this.activeSessions.entries()) {
-      if (now - session.lastUsed > this.sessionTimeout) {
-        this.activeSessions.delete(token);
-      }
-    }
+  async cleanupSessions() {
+    await this.sessionStorage.cleanupExpiredSessions();
   }
 
   // Get authentication statistics
-  getStats() {
-    this.cleanupSessions();
+  async getStats() {
+    await this.cleanupSessions();
+    
+    const sessionStats = await this.sessionStorage.getStats();
     
     return {
-      activeSessions: this.activeSessions.size,
+      activeSessions: sessionStats.sessionCount,
+      storageType: sessionStats.storageType,
+      redisConnected: sessionStats.redisConnected,
       rateLimitedIPs: Array.from(this.rateLimiter.entries())
         .filter(([ip, attempts]) => attempts.count >= this.maxAttempts)
         .map(([ip, attempts]) => ({

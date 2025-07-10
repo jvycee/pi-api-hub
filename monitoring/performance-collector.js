@@ -30,19 +30,24 @@ class PerformanceCollector {
     this.responseTimes = [];
     this.errorRates = [];
     
+    // Store interval IDs for cleanup
+    this.intervals = [];
+    
     this.startCollection();
   }
 
   startCollection() {
     // Collect system metrics
-    setInterval(() => {
+    const systemMetricsInterval = setInterval(() => {
       this.collectSystemMetrics();
     }, this.collectInterval);
+    this.intervals.push(systemMetricsInterval);
     
     // Clean up old data
-    setInterval(() => {
+    const cleanupInterval = setInterval(() => {
       this.cleanupOldData();
     }, this.collectInterval * 4); // Every 2 minutes
+    this.intervals.push(cleanupInterval);
     
     logger.info('Performance collection started', {
       interval: this.collectInterval,
@@ -291,6 +296,15 @@ class PerformanceCollector {
     }
     
     return this.metrics[type].filter(metric => metric.timestamp > cutoffTime);
+  }
+
+  // Clean up intervals on shutdown
+  stop() {
+    this.intervals.forEach(interval => {
+      clearInterval(interval);
+    });
+    this.intervals = [];
+    logger.info('Performance collection stopped and intervals cleaned up');
   }
 
   // Create middleware for automatic tracking

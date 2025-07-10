@@ -7,6 +7,9 @@ class MemoryMonitor {
     this.logInterval = options.logInterval || 60000; // 1 minute
     this.gcThreshold = options.gcThreshold || 0.8; // 80% memory usage
     
+    // Store interval ID for cleanup
+    this.monitoringInterval = null;
+    
     this.startMonitoring();
   }
 
@@ -65,7 +68,7 @@ class MemoryMonitor {
   }
 
   startMonitoring() {
-    setInterval(() => {
+    this.monitoringInterval = setInterval(() => {
       const memory = this.getMemoryUsage();
       const status = this.checkMemoryHealth();
       
@@ -137,6 +140,15 @@ class MemoryMonitor {
         critical: this.formatBytes(this.criticalThreshold)
       }
     };
+  }
+
+  // Clean up monitoring interval
+  stop() {
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
+      logger.info('Memory monitoring stopped and interval cleaned up');
+    }
   }
 }
 

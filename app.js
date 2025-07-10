@@ -32,6 +32,8 @@ const AutoRestartManager = require('./monitoring/auto-restart');
 const AnalyticsDashboard = require('./analytics/analytics-dashboard');
 const AdvancedAnalyticsEngine = require('./analytics/advanced-analytics-engine');
 const EnhancedAnalyticsDashboard = require('./analytics/enhanced-analytics-dashboard');
+const InputValidationSchemas = require('./middleware/input-validation-schemas');
+const cleanupHandler = require('./middleware/cleanup-handler');
 
 // Validate configuration
 try {
@@ -80,6 +82,14 @@ autoRestart.setMonitors(performanceCollector, memoryMonitor);
 
 // Setup webhook handlers
 webhookHandler.setupDefaultHandlers();
+
+// Initialize input validation schemas
+const inputValidator = new InputValidationSchemas();
+
+// Register services for cleanup
+cleanupHandler.registerService(performanceCollector, 'PerformanceCollector');
+cleanupHandler.registerService(memoryMonitor, 'MemoryMonitor');
+cleanupHandler.registerService(autoRestart, 'AutoRestartManager');
 
 // Helper function for admin authentication
 const requireAdminAuth = adminAuth?.middleware() || ((req, res, next) => {
@@ -155,7 +165,7 @@ app.get('/health', (req, res) => {
 });
 
 // 🍌 MAXIMUM BANANA MONITORING DASHBOARD 🍌
-app.get('/monitoring/dashboard', async (req, res) => {
+app.get('/monitoring/dashboard', inputValidator.validateRequest('monitoringQuery', 'query'), async (req, res) => {
   try {
     const snapshot = performanceCollector.getSnapshot();
     const memoryStatus = memoryMonitor.getStatus();
@@ -164,7 +174,7 @@ app.get('/monitoring/dashboard', async (req, res) => {
     const logStats = await logRotator.getLogStats();
     const diskUsage = await logRotator.getDiskUsage();
     const cacheStats = intelligentCache.getStats();
-    const batchingStats = requestBatcher.getStats();
+    const batchingStats = requestDeduplicationBatcher.getStats();
     const webhookStats = webhookHandler.getStats();
     const aiStats = aiHandler.getStats();
     
@@ -437,31 +447,31 @@ app.get('/monitoring/cache/warm', async (req, res) => {
 
 // Request deduplication and batching endpoints - REFACTORED
 app.get('/monitoring/deduplication', MonitoringFactory.createGetEndpoint(
-  () => requestBatcher.getStats(),
+  () => requestDeduplicationBatcher.getStats(),
   { name: 'deduplication-stats', errorMessage: 'Failed to get deduplication statistics' }
 ));
 
 // POST /monitoring/deduplication/flush - REFACTORED
 app.post('/monitoring/deduplication/flush', requireAdminAuth, MonitoringFactory.createPostEndpoint(
-  async () => { await requestBatcher.flushBatches(); },
+  async () => { await requestDeduplicationBatcher.flushBatches(); },
   { name: 'deduplication-flush', successMessage: 'All pending batches flushed successfully', errorMessage: 'Failed to flush batches' }
 ));
 
 // POST /monitoring/deduplication/clear - REFACTORED
 app.post('/monitoring/deduplication/clear', requireAdminAuth, MonitoringFactory.createPostEndpoint(
-  () => { requestBatcher.clearDeduplication(); },
+  () => { requestDeduplicationBatcher.clearDeduplication(); },
   { name: 'deduplication-clear', successMessage: 'Deduplication data cleared successfully', errorMessage: 'Failed to clear deduplication data' }
 ));
 
 // GET /monitoring/deduplication/batches - REFACTORED
 app.get('/monitoring/deduplication/batches', MonitoringFactory.createGetEndpoint(
-  () => requestBatcher.getActiveBatches(),
+  () => requestDeduplicationBatcher.getActiveBatches(),
   { name: 'deduplication-batches', errorMessage: 'Failed to get active batch details' }
 ));
 
 // GET /monitoring/deduplication/duplicates - Get duplicate request details
 app.get('/monitoring/deduplication/duplicates', MonitoringFactory.createGetEndpoint(
-  () => requestBatcher.getDuplicateDetails(),
+  () => requestDeduplicationBatcher.getDuplicateDetails(),
   { name: 'deduplication-duplicates', errorMessage: 'Failed to get duplicate request details' }
 ));
 
@@ -644,7 +654,7 @@ app.get('/api/hubspot/contacts/cursor/stream', async (req, res) => {
   }
 });
 
-app.post('/api/hubspot/contacts', async (req, res) => {
+app.post('/api/hubspot/contacts', inputValidator.validateRequest('hubspotContact'), async (req, res) => {
   try {
     const contactData = req.body;
     const data = await authHandler.callHubSpot('/crm/v3/objects/contacts', 'POST', {
@@ -744,7 +754,7 @@ app.post('/api/hubspot/graphql', async (req, res) => {
 });
 
 // AI endpoint with smart routing (Ollama primary, Claude for specialized tasks)
-app.post('/api/anthropic/messages', async (req, res) => {
+app.post('/api/anthropic/messages', inputValidator.validateRequest('anthropicMessage'), async (req, res) => {
   try {
     const { model = 'claude-3-haiku-20240307', max_tokens = 1000, messages, taskType, forceClaude } = req.body;
     

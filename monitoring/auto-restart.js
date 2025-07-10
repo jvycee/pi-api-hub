@@ -21,6 +21,9 @@ class AutoRestartManager {
     this.performanceCollector = null;
     this.memoryMonitor = null;
     
+    // Store interval IDs for cleanup
+    this.intervals = [];
+    
     this.startMonitoring();
   }
 
@@ -30,15 +33,17 @@ class AutoRestartManager {
   }
 
   startMonitoring() {
-    setInterval(() => {
+    const healthCheckInterval = setInterval(() => {
       this.checkSystemHealth();
     }, this.checkInterval);
+    this.intervals.push(healthCheckInterval);
     
     // Reset error count every minute
-    setInterval(() => {
+    const errorResetInterval = setInterval(() => {
       this.lastErrorCount = this.errorCount;
       this.errorCount = 0;
     }, 60000);
+    this.intervals.push(errorResetInterval);
     
     logger.info('Auto-restart monitoring started', {
       memoryThreshold: this.formatBytes(this.memoryThreshold),
@@ -320,6 +325,15 @@ class AutoRestartManager {
   // Set server instance for graceful shutdown
   setServer(server) {
     this.server = server;
+  }
+
+  // Clean up intervals on shutdown
+  stop() {
+    this.intervals.forEach(interval => {
+      clearInterval(interval);
+    });
+    this.intervals = [];
+    logger.info('Auto-restart monitoring stopped and intervals cleaned up');
   }
 }
 
