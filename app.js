@@ -6,7 +6,6 @@ const streamTracker = require('./shared/stream-tracker');
 const ResponseHelper = require('./shared/response-helper');
 const MonitoringFactory = require('./shared/monitoring-factory');
 const AuthHandler = require('./middleware/auth-handler');
-const SecurityStack = require('./middleware/security-stack');
 const CoreStack = require('./middleware/core-stack');
 const SimpleTenantManager = require('./middleware/simple-tenant');
 const SimpleAuth = require('./middleware/simple-auth');
@@ -36,7 +35,6 @@ const authHandler = new AuthHandler();
 const jsonOptimizer = new JSONOptimizer();
 
 // Initialize optimized middleware stacks
-const securityStack = new SecurityStack();
 const coreStack = new CoreStack(config, jsonOptimizer);
 const paginationHelper = new PaginationHelper();
 const cursorPagination = new CursorPagination();
