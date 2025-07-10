@@ -457,6 +457,27 @@
                     return;
                 }
                 
+                // Check if we're accessing from localhost/local network - auto-get admin key
+                const hostname = window.location.hostname;
+                if (hostname === 'localhost' || 
+                    hostname === '127.0.0.1' || 
+                    hostname.startsWith('10.0.0.') || 
+                    hostname.startsWith('192.168.')) {
+                    
+                    try {
+                        // Auto-fetch admin key for local access
+                        const response = await fetch('/setup/admin-key');
+                        const data = await response.json();
+                        if (data.success) {
+                            this.apiKey = data.adminKey;
+                            console.log('🍌 Auto-authenticated for local access');
+                            return;
+                        }
+                    } catch (error) {
+                        console.log('Auto-auth failed, falling back to manual entry');
+                    }
+                }
+                
                 // Prompt for API key
                 const key = prompt('🍌 Enter your admin API key to access the Banana Security Command Center:');
                 if (key && key.startsWith('pk_')) {
