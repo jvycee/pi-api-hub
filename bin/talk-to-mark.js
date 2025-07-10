@@ -6,7 +6,7 @@ const chalk = require('chalk');
 
 class MarkChat {
   constructor() {
-    this.piApiUrl = process.env.PI_API_URL || 'http://localhost:3000';
+    this.piApiUrl = process.env.PI_API_URL || 'http://10.0.0.218:3000';
     this.conversationHistory = [];
     this.markPersonality = {
       name: "Mark",
