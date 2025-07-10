@@ -1,3 +1,6 @@
+// Load environment variables first
+require('dotenv').config();
+
 const cluster = require('cluster');
 const os = require('os');
 const config = require('./shared/config');
@@ -91,7 +94,13 @@ class ClusterManager {
   }
 
   forkWorker() {
-    const worker = cluster.fork({ NODE_CLUSTER_WORKER: 'true' });
+    // Pass all environment variables to worker processes
+    const workerEnv = {
+      ...process.env,
+      NODE_CLUSTER_WORKER: 'true'
+    };
+    
+    const worker = cluster.fork(workerEnv);
     this.workers[worker.id] = {
       worker,
       startTime: Date.now(),

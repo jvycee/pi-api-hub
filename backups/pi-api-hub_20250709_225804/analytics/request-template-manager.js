@@ -552,10 +552,25 @@ Be specific and actionable. Consider that this is a Raspberry Pi 5 system with 8
    */
   parseOllamaSuggestions(ollamaResponse) {
     try {
-      // Extract JSON from response
-      const jsonMatch = ollamaResponse.match(/\{[\s\S]*\}/);
+      // 🦙 FULL OLLAMA MODE - Robust response parsing
+      let responseText = '';
+      
+      // Handle different response formats
+      if (typeof ollamaResponse === 'string') {
+        responseText = ollamaResponse;
+      } else if (ollamaResponse && typeof ollamaResponse.response === 'string') {
+        responseText = ollamaResponse.response;
+      } else if (ollamaResponse && ollamaResponse.content && Array.isArray(ollamaResponse.content)) {
+        responseText = ollamaResponse.content.map(c => c.text || c.content || '').join(' ');
+      } else {
+        logger.warn('🦙 Unable to extract text from Ollama response:', typeof ollamaResponse);
+        return [];
+      }
+      
+      // Extract JSON from response text
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        logger.warn('No JSON found in Ollama response');
+        logger.warn('🦙 No JSON found in Ollama response text');
         return [];
       }
       

@@ -6,12 +6,33 @@ const streamTracker = require('./shared/stream-tracker');
 const ResponseHelper = require('./shared/response-helper');
 const MonitoringFactory = require('./shared/monitoring-factory');
 const AuthHandler = require('./middleware/auth-handler');
-const SecurityStack = require('./middleware/security-stack');
-const CoreStack = require('./middleware/core-stack');
+const MemoryMonitor = require('./middleware/memory-monitor');
+const RequestQueue = require('./middleware/request-queue');
+const StreamingHandler = require('./middleware/streaming-handler');
+const CompressionMiddleware = require('./middleware/compression');
+const IntelligentCache = require('./middleware/intelligent-cache');
+const RequestDeduplicationBatcher = require('./middleware/request-deduplication');
+const WebhookHandler = require('./middleware/webhook-handler');
+const AIFallbackHandler = require('./middleware/ai-fallback-handler');
+// 🍌 Smart Banana Features
 const SimpleTenantManager = require('./middleware/simple-tenant');
 const SimpleAuth = require('./middleware/simple-auth');
 const SimpleBackupSystem = require('./middleware/simple-backup');
+// Security middleware
+const AdminAuthMiddleware = require('./middleware/admin-auth');
+const SecurityHeadersMiddleware = require('./middleware/security-headers');
+const InputValidationMiddleware = require('./middleware/input-validation');
+const RateLimitingMiddleware = require('./middleware/rate-limiting');
 const HttpsSupport = require('./middleware/https-support');
+// 🍌 PHASE 2 SECURITY: BANANA MOTHERSHIP LEVEL LOCKDOWN 🍌
+const ThreatDetection = require('./middleware/threat-detection');
+const SecurityCommandCenter = require('./middleware/security-command-center');
+const BananaMFA = require('./middleware/banana-mfa');
+const BananaZeroTrust = require('./middleware/banana-zero-trust');
+const BananaVulnerabilityScanner = require('./middleware/banana-vulnerability-scanner');
+const BananaAuditLogger = require('./middleware/banana-audit-logger');
+const BananaRequestSigning = require('./middleware/banana-request-signing');
+const BananaHoneypots = require('./middleware/banana-honeypots');
 const PaginationHelper = require('./helpers/pagination-helper');
 const CursorPagination = require('./helpers/cursor-pagination');
 const JSONOptimizer = require('./helpers/json-optimizer');
@@ -19,6 +40,7 @@ const LogRotator = require('./monitoring/log-rotator');
 const PerformanceCollector = require('./monitoring/performance-collector');
 const PredictiveHealthMonitor = require('./monitoring/predictive-health-monitor');
 const AutoRestartManager = require('./monitoring/auto-restart');
+const AnalyticsMiddleware = require('./middleware/analytics-middleware');
 const AnalyticsDashboard = require('./analytics/analytics-dashboard');
 const AdvancedAnalyticsEngine = require('./analytics/advanced-analytics-engine');
 const EnhancedAnalyticsDashboard = require('./analytics/enhanced-analytics-dashboard');
@@ -78,6 +100,20 @@ const inputValidation = new InputValidationMiddleware({
   maxQueryParams: 50,
   sanitizeStrings: true
 });
+const rateLimiting = new RateLimitingMiddleware();
+const httpsSupport = new HttpsSupport();
+// 🔐 SMART BANANA AUTHENTICATION 🔐
+const simpleAuth = new SimpleAuth();
+
+// 🍌 PHASE 2 SECURITY INSTANCES 🍌
+const threatDetection = new ThreatDetection();
+const bananaMFA = new BananaMFA();
+const bananaZeroTrust = new BananaZeroTrust();
+const bananaVulnerabilityScanner = new BananaVulnerabilityScanner();
+const bananaAuditLogger = new BananaAuditLogger();
+const bananaRequestSigning = new BananaRequestSigning();
+const bananaHoneypots = new BananaHoneypots();
+const securityCommandCenter = new SecurityCommandCenter(threatDetection, simpleAuth, rateLimiting);
 const paginationHelper = new PaginationHelper();
 const cursorPagination = new CursorPagination();
 const logRotator = new LogRotator();
@@ -91,6 +127,21 @@ const analyticsMiddleware = new AnalyticsMiddleware(aiHandler, {
   analysisInterval: 30000 // 30 seconds
 });
 const analyticsDashboard = new AnalyticsDashboard(analyticsMiddleware);
+
+// 🍌 ADVANCED ANALYTICS ENGINE 🍌
+const advancedAnalyticsEngine = new AdvancedAnalyticsEngine(analyticsMiddleware, aiHandler, {
+  historicalDataRetention: 24 * 60 * 60 * 1000, // 24 hours
+  trendAnalysisWindow: 60 * 60 * 1000, // 1 hour
+  degradationThreshold: 0.25, // 25% degradation
+  realTimeUpdateInterval: 30000 // 30 seconds
+});
+const enhancedAnalyticsDashboard = new EnhancedAnalyticsDashboard(advancedAnalyticsEngine);
+
+// 🍌 SMART BANANA TENANT MANAGER 🍌
+const tenantManager = new SimpleTenantManager();
+
+// 📦 SMART BANANA BACKUP SYSTEM 📦
+const backupSystem = new SimpleBackupSystem();
 
 // Connect monitoring systems
 autoRestart.setMonitors(performanceCollector, memoryMonitor);
@@ -108,16 +159,36 @@ const requireAdminAuth = adminAuth?.middleware() || ((req, res, next) => {
   next();
 });
 
-// Security middleware first
+// 🍌 PHASE 2 SECURITY: BANANA MOTHERSHIP LEVEL LOCKDOWN 🍌
+// Security middleware first - MAXIMUM BANANA PROTECTION
+app.use(httpsSupport.redirectToHttps());
+app.use(httpsSupport.securityHeaders());
+app.use(bananaHoneypots.honeypotMiddleware()); // Honeypots catch attacks early
+app.use(threatDetection.middleware()); // Threat detection before everything else
+app.use(rateLimiting.globalLimiter());
 app.use(securityHeaders.middleware());
 app.use(inputValidation.middleware());
+app.use(bananaZeroTrust.middleware()); // Zero-trust verification
+
+// 🍌 Tenant identification (early in stack)
+app.use(tenantManager.middleware());
 
 // CORS with secure origins
 app.use(cors({
   origin: config.security?.corsOrigins || config.server?.corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key']
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'x-admin-api-key', 
+    'x-tenant-id',
+    'x-api-key',
+    'x-banana-signature',
+    'x-banana-timestamp', 
+    'x-banana-nonce',
+    'x-mfa-token'
+  ]
 }));
 
 // Standard middleware
@@ -128,6 +199,28 @@ app.use(requestQueue.middleware());
 app.use(jsonOptimizer.middleware());
 app.use(performanceCollector.middleware());
 app.use(analyticsMiddleware.middleware());
+
+// 🍌 Security audit logging middleware
+app.use((req, res, next) => {
+  // Log security events for audit trails
+  if (req.user) {
+    bananaAuditLogger.logAccessControlEvent(
+      req.user.id,
+      req.path,
+      req.method,
+      'GRANTED',
+      {
+        ip: req.ip,
+        path: req.path,
+        method: req.method,
+        userAgent: req.get('User-Agent'),
+        permissions: req.permissions || [],
+        policyApplied: req.bananaZeroTrust?.accessDecision?.policyType || 'default'
+      }
+    );
+  }
+  next();
+});
 
 // Intelligent caching for API endpoints
 app.use('/api/hubspot/contacts', intelligentCache.middleware({
@@ -572,6 +665,434 @@ app.get('/monitoring/ai/models', MonitoringFactory.createGetEndpoint(
 // 📊 ANALYTICS DASHBOARD ENDPOINTS 📊
 analyticsDashboard.createEndpoints(app, requireAdminAuth);
 
+// 🍌 ENHANCED ANALYTICS DASHBOARD ENDPOINTS 🍌
+enhancedAnalyticsDashboard.createEndpoints(app, requireAdminAuth);
+
+// 🍌🛡️ PHASE 2 SECURITY DASHBOARD ENDPOINTS 🛡️🍌
+// Security Command Center Dashboard
+app.get('/security/command-center', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => securityCommandCenter.getBananaSecurityDashboard(),
+  { name: 'security-command-center', errorMessage: 'Failed to get security command center dashboard' }
+));
+
+// Threat Detection Dashboard
+app.get('/security/threat-detection', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => threatDetection.getThreatDetectionDashboard(),
+  { name: 'threat-detection', errorMessage: 'Failed to get threat detection dashboard' }
+));
+
+// MFA Dashboard
+app.get('/security/mfa', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaMFA.getBananaMFASecurityReport(),
+  { name: 'mfa-dashboard', errorMessage: 'Failed to get MFA dashboard' }
+));
+
+// Zero Trust Dashboard
+app.get('/security/zero-trust', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaZeroTrust.getBananaZeroTrustDashboard(),
+  { name: 'zero-trust-dashboard', errorMessage: 'Failed to get zero trust dashboard' }
+));
+
+// Vulnerability Scanner Dashboard
+app.get('/security/vulnerability-scanner', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaVulnerabilityScanner.getBananaVulnerabilityDashboard(),
+  { name: 'vulnerability-scanner', errorMessage: 'Failed to get vulnerability scanner dashboard' }
+));
+
+// Audit Logger Dashboard
+app.get('/security/audit-logs', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaAuditLogger.getComplianceDashboard(),
+  { name: 'audit-logs', errorMessage: 'Failed to get audit logs dashboard' }
+));
+
+// Request Signing Dashboard
+app.get('/security/request-signing', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaRequestSigning.getBananaSigningDashboard(),
+  { name: 'request-signing', errorMessage: 'Failed to get request signing dashboard' }
+));
+
+// Honeypots Dashboard
+app.get('/security/honeypots', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaHoneypots.getBananaHoneypotDashboard(),
+  { name: 'honeypots', errorMessage: 'Failed to get honeypots dashboard' }
+));
+
+// 🍌 SECURITY MANAGEMENT ENDPOINTS 🍌
+// Force vulnerability scan
+app.post('/security/vulnerability-scan', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async () => {
+    const scanResults = await bananaVulnerabilityScanner.forceImmediateScan();
+    return { scanResults };
+  },
+  { name: 'force-vulnerability-scan', successMessage: 'Vulnerability scan completed', errorMessage: 'Failed to run vulnerability scan' }
+));
+
+// Generate security report
+app.get('/security/report', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => securityCommandCenter.generateBananaSecurityReport(),
+  { name: 'security-report', errorMessage: 'Failed to generate security report' }
+));
+
+// Ban IP address
+app.post('/security/ban-ip', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { ip, reason, duration } = req.body;
+    if (!ip) throw new Error('IP address is required');
+    
+    const result = bananaHoneypots.manualBanIP(ip, reason || 'Manual ban', duration);
+    bananaAuditLogger.logSecurityEvent('IP_BAN', {
+      ip,
+      reason: reason || 'Manual ban',
+      duration,
+      adminUser: req.user?.id || 'admin'
+    });
+    
+    return result;
+  },
+  { name: 'ban-ip', successMessage: 'IP banned successfully', errorMessage: 'Failed to ban IP' }
+));
+
+// Unban IP address
+app.post('/security/unban-ip', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { ip } = req.body;
+    if (!ip) throw new Error('IP address is required');
+    
+    const result = bananaHoneypots.unbanIP(ip);
+    bananaAuditLogger.logSecurityEvent('IP_UNBAN', {
+      ip,
+      adminUser: req.user?.id || 'admin'
+    });
+    
+    return result;
+  },
+  { name: 'unban-ip', successMessage: 'IP unbanned successfully', errorMessage: 'Failed to unban IP' }
+));
+
+// MFA Setup for user
+app.post('/security/mfa/setup', simpleAuth.middleware(), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+    
+    const mfaSetup = await bananaMFA.generateBananaMFASecret(userId, userEmail);
+    bananaAuditLogger.logAuthenticationEvent(userId, 'MFA_SETUP_REQUESTED', 'SUCCESS', {
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+    
+    return mfaSetup;
+  },
+  { name: 'mfa-setup', successMessage: 'MFA setup initiated', errorMessage: 'Failed to setup MFA' }
+));
+
+// MFA Verification
+app.post('/security/mfa/verify', simpleAuth.middleware(), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { token } = req.body;
+    const userId = req.user.id;
+    
+    if (!token) throw new Error('MFA token is required');
+    
+    const result = bananaMFA.verifyBananaMFAToken(userId, token);
+    bananaAuditLogger.logAuthenticationEvent(userId, 'MFA_VERIFY', result.verified ? 'SUCCESS' : 'FAILURE', {
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      mfaUsed: true
+    });
+    
+    if (result.verified) {
+      req.session = req.session || {};
+      req.session.mfaVerified = true;
+    }
+    
+    return result;
+  },
+  { name: 'mfa-verify', errorMessage: 'MFA verification failed' }
+));
+
+// Robots.txt with honeypot bait
+app.get('/robots.txt', (req, res) => {
+  const robotsTxt = bananaHoneypots.generateRobotsTxt();
+  res.type('text/plain');
+  res.send(robotsTxt);
+});
+
+// 🍌 SMART BANANA TENANT ENDPOINTS 🍌
+// GET /admin/tenants - List all tenants
+app.get('/admin/tenants', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => ({
+    tenants: tenantManager.listTenants(),
+    stats: tenantManager.getStats()
+  }),
+  { name: 'tenant-list', errorMessage: 'Failed to get tenant list' }
+));
+
+// POST /admin/tenants - Create new tenant
+app.post('/admin/tenants', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { tenantId, name, description, features, limits } = req.body;
+    
+    if (!tenantId || !name) {
+      throw new Error('tenantId and name are required');
+    }
+    
+    const config = await tenantManager.createTenant(tenantId, {
+      name,
+      description,
+      features,
+      limits
+    });
+    
+    return { tenant: config };
+  },
+  { name: 'tenant-create', successMessage: 'Tenant created successfully', errorMessage: 'Failed to create tenant' }
+));
+
+// PUT /admin/tenants/:tenantId - Update tenant
+app.put('/admin/tenants/:tenantId', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { tenantId } = req.params;
+    const updates = req.body;
+    
+    const config = await tenantManager.updateTenant(tenantId, updates);
+    
+    return { tenant: config };
+  },
+  { name: 'tenant-update', successMessage: 'Tenant updated successfully', errorMessage: 'Failed to update tenant' }
+));
+
+// GET /admin/tenants/:tenantId - Get specific tenant
+app.get('/admin/tenants/:tenantId', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  async (req) => {
+    const { tenantId } = req.params;
+    const config = await tenantManager.getTenantConfig(tenantId);
+    
+    return { tenant: config };
+  },
+  { name: 'tenant-get', errorMessage: 'Failed to get tenant' }
+));
+
+// 🔐 SMART BANANA AUTHENTICATION ENDPOINTS 🔐
+// POST /auth/login - User login
+app.post('/auth/login', rateLimiting.authLimiter(), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { identifier, password, tenantId } = req.body;
+    
+    if (!identifier || !password) {
+      throw new Error('Username/email and password are required');
+    }
+    
+    const user = await simpleAuth.authenticateUser(identifier, password, tenantId || req.tenant?.id || 'default');
+    
+    if (!user) {
+      throw new Error('Invalid credentials');
+    }
+    
+    const accessToken = await simpleAuth.generateToken(user);
+    const refreshToken = simpleAuth.generateRefreshToken(user);
+    
+    return {
+      accessToken,
+      refreshToken,
+      user,
+      expiresIn: '24h'
+    };
+  },
+  { name: 'auth-login', successMessage: 'Login successful', errorMessage: 'Login failed' }
+));
+
+// POST /auth/refresh - Refresh JWT token
+app.post('/auth/refresh', rateLimiting.authLimiter(), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      throw new Error('Refresh token is required');
+    }
+    
+    const result = await simpleAuth.refreshToken(refreshToken);
+    
+    if (!result) {
+      throw new Error('Invalid or expired refresh token');
+    }
+    
+    return result;
+  },
+  { name: 'auth-refresh', successMessage: 'Token refreshed successfully', errorMessage: 'Token refresh failed' }
+));
+
+// GET /auth/me - Get current user info
+app.get('/auth/me', simpleAuth.middleware(), MonitoringFactory.createGetEndpoint(
+  (req) => ({
+    user: req.user,
+    permissions: req.permissions,
+    authMethod: req.authMethod
+  }),
+  { name: 'auth-me', errorMessage: 'Failed to get user info' }
+));
+
+// POST /auth/logout - Logout (invalidate refresh token)
+app.post('/auth/logout', MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { refreshToken } = req.body;
+    
+    if (refreshToken) {
+      simpleAuth.refreshTokens.delete(refreshToken);
+    }
+    
+    return { message: 'Logout successful' };
+  },
+  { name: 'auth-logout', successMessage: 'Logout successful', errorMessage: 'Logout failed' }
+));
+
+// 🔐 USER MANAGEMENT ENDPOINTS (Admin only)
+// GET /admin/users - List users
+app.get('/admin/users', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createGetEndpoint(
+  (req) => ({
+    users: simpleAuth.listUsers(req.query.tenantId),
+    stats: simpleAuth.getAuthStats()
+  }),
+  { name: 'admin-users-list', errorMessage: 'Failed to get users' }
+));
+
+// POST /admin/users - Create new user
+app.post('/admin/users', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { username, email, password, role, tenantId } = req.body;
+    
+    if (!username || !email || !password) {
+      throw new Error('Username, email, and password are required');
+    }
+    
+    const user = await simpleAuth.createUser({
+      username,
+      email,
+      password,
+      role,
+      tenantId
+    });
+    
+    return { user };
+  },
+  { name: 'admin-users-create', successMessage: 'User created successfully', errorMessage: 'Failed to create user' }
+));
+
+// PUT /admin/users/:userId - Update user
+app.put('/admin/users/:userId', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { userId } = req.params;
+    const updates = req.body;
+    
+    const user = await simpleAuth.updateUser(userId, updates);
+    
+    return { user };
+  },
+  { name: 'admin-users-update', successMessage: 'User updated successfully', errorMessage: 'Failed to update user' }
+));
+
+// DELETE /admin/users/:userId - Delete user
+app.delete('/admin/users/:userId', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { userId } = req.params;
+    
+    await simpleAuth.deleteUser(userId);
+    
+    return { message: 'User deleted successfully' };
+  },
+  { name: 'admin-users-delete', successMessage: 'User deleted successfully', errorMessage: 'Failed to delete user' }
+));
+
+// POST /admin/users/:userId/api-keys - Generate API key for user
+app.post('/admin/users/:userId/api-keys', requireAdminAuth, simpleAuth.requirePermission('manage_users'), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { userId } = req.params;
+    const { name } = req.body;
+    
+    const user = simpleAuth.users.get(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    const apiKey = simpleAuth.generateApiKey(user, name);
+    
+    return { apiKey };
+  },
+  { name: 'admin-users-api-key', successMessage: 'API key generated successfully', errorMessage: 'Failed to generate API key' }
+));
+
+// 📦 SMART BANANA BACKUP SYSTEM ENDPOINTS 📦
+// GET /admin/backups - List all backups
+app.get('/admin/backups', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  async () => {
+    const backups = await backupSystem.listBackups();
+    const stats = await backupSystem.getBackupStats();
+    
+    return {
+      backups,
+      stats
+    };
+  },
+  { name: 'backup-list', errorMessage: 'Failed to list backups' }
+));
+
+// POST /admin/backups - Create new backup
+app.post('/admin/backups', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async () => {
+    const backup = await backupSystem.createBackup();
+    
+    return { backup };
+  },
+  { name: 'backup-create', successMessage: 'Backup created successfully', errorMessage: 'Failed to create backup' }
+));
+
+// GET /admin/backups/stats - Get backup statistics
+app.get('/admin/backups/stats', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  async () => {
+    const stats = await backupSystem.getBackupStats();
+    
+    return { stats };
+  },
+  { name: 'backup-stats', errorMessage: 'Failed to get backup statistics' }
+));
+
+// POST /admin/backups/:backupId/restore - Restore backup
+app.post('/admin/backups/:backupId/restore', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { backupId } = req.params;
+    
+    const restoration = await backupSystem.restoreBackup(backupId);
+    
+    return { restoration };
+  },
+  { name: 'backup-restore', successMessage: 'Backup restored successfully', errorMessage: 'Failed to restore backup' }
+));
+
+// POST /admin/backups/schedule/stop - Stop backup scheduler
+app.post('/admin/backups/schedule/stop', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  () => {
+    backupSystem.stop();
+    
+    return { message: 'Backup scheduler stopped' };
+  },
+  { name: 'backup-schedule-stop', successMessage: 'Backup scheduler stopped', errorMessage: 'Failed to stop backup scheduler' }
+));
+
+// POST /admin/backups/schedule/start - Start backup scheduler
+app.post('/admin/backups/schedule/start', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  () => {
+    backupSystem.start();
+    
+    return { message: 'Backup scheduler started' };
+  },
+  { name: 'backup-schedule-start', successMessage: 'Backup scheduler started', errorMessage: 'Failed to start backup scheduler' }
+));
+
+// Apply rate limiting to API endpoints
+app.use('/api/', rateLimiting.apiLimiter());
+app.use('/monitoring/', rateLimiting.monitoringLimiter());
+app.use('/admin/', rateLimiting.adminLimiter());
+
 // API connection test endpoint - REFACTORED
 app.get('/api/test-connections', MonitoringFactory.createGetEndpoint(
   async () => {
@@ -844,9 +1365,12 @@ app.use((req, res) => {
 
 // Start server only if not being imported by tests or running as cluster worker
 if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
+  // Start HTTP server
   const server = app.listen(config.server.port, () => {
-    logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌 (GitHub Actions Test)`);
-    logger.info(`Port: ${config.server.port}`);
+    logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌`);
+    logger.info(`🌐 HTTP Port: ${config.server.port}`);
+    logger.info(`🔒 HTTPS Status: ${httpsSupport.isHttpsAvailable() ? 'Available' : 'Not configured'}`);
+    logger.info(`🛡️  Security: Rate limiting enabled, Headers secured`);
     logger.info(`Environment: ${config.server.env}`);
     logger.info(`Mode: ${process.env.NODE_CLUSTER_WORKER ? '4-Core Beast Mode' : 'Single Core'}`);
     logger.info('🚀 MAXIMUM BANANA ENDPOINTS:');
@@ -864,25 +1388,134 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info('  🤖 POST /api/anthropic/messages - Smart AI routing (Ollama + Claude)');
     logger.info('  🌐 ALL  /api/hubspot/* - Proxy to any HubSpot endpoint');
     logger.info('  🔗 POST /webhooks/hubspot - HubSpot webhooks receiver');
-    logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
+    logger.info('🍌 ENHANCED ANALYTICS ENDPOINTS:');
+    logger.info('  📊 GET  /analytics/enhanced/realtime-dashboard - Real-time analytics');
+    logger.info('  📈 GET  /analytics/enhanced/trends - Historical trend analysis');
+    logger.info('  🚨 GET  /analytics/enhanced/degradation-report - Performance degradation');
+    logger.info('  🔮 GET  /analytics/enhanced/predictions - Predictive analytics');
+    logger.info('  📱 GET  /analytics/enhanced/overview - Comprehensive overview');
+    logger.info('🍌 SMART BANANA TENANT ENDPOINTS:');
+    logger.info('  🏢 GET  /admin/tenants - List all tenants');
+    logger.info('  ➕ POST /admin/tenants - Create new tenant');
+    logger.info('  📝 PUT  /admin/tenants/:id - Update tenant');
+    logger.info('  🔍 GET  /admin/tenants/:id - Get specific tenant');
+    logger.info('🔐 SMART BANANA AUTHENTICATION ENDPOINTS:');
+    logger.info('  🔑 POST /auth/login - User login');
+    logger.info('  🔄 POST /auth/refresh - Refresh JWT token');
+    logger.info('  👤 GET  /auth/me - Get current user info');
+    logger.info('  🚪 POST /auth/logout - Logout user');
+    logger.info('  👥 GET  /admin/users - List users (admin)');
+    logger.info('  ➕ POST /admin/users - Create user (admin)');
+    logger.info('  🔑 POST /admin/users/:id/api-keys - Generate API key');
+    logger.info('📦 SMART BANANA BACKUP SYSTEM ENDPOINTS:');
+    logger.info('  📋 GET  /admin/backups - List all backups');
+    logger.info('  ➕ POST /admin/backups - Create new backup');
+    logger.info('  📊 GET  /admin/backups/stats - Get backup statistics');
+    logger.info('  🔄 POST /admin/backups/:id/restore - Restore backup');
+    logger.info('  ⏹️  POST /admin/backups/schedule/stop - Stop scheduler');
+    logger.info('  ▶️  POST /admin/backups/schedule/start - Start scheduler');
+    logger.info('🍌🛡️ PHASE 2 SECURITY: BANANA MOTHERSHIP LEVEL LOCKDOWN 🛡️🍌');
+    logger.info('  🏛️ GET  /security/command-center - Security command center');
+    logger.info('  🚨 GET  /security/threat-detection - Threat detection dashboard');
+    logger.info('  🔐 GET  /security/mfa - Multi-factor authentication');
+    logger.info('  🛡️ GET  /security/zero-trust - Zero-trust security');
+    logger.info('  🔍 GET  /security/vulnerability-scanner - Vulnerability scanner');
+    logger.info('  📋 GET  /security/audit-logs - Security audit logs');
+    logger.info('  ✍️ GET  /security/request-signing - Request signing');
+    logger.info('  🍯 GET  /security/honeypots - Honeypot traps');
+    logger.info('  📊 GET  /security/report - Security report');
+    logger.info('  🔒 POST /security/vulnerability-scan - Force vulnerability scan');
+    logger.info('  🚫 POST /security/ban-ip - Ban IP address');
+    logger.info('  ✅ POST /security/unban-ip - Unban IP address');
+    logger.info('  🔐 POST /security/mfa/setup - Setup MFA');
+    logger.info('  ✅ POST /security/mfa/verify - Verify MFA token');
+    logger.info('  🤖 GET  /robots.txt - Robots.txt with honeypot bait');
+    logger.info('🍌 BANANA POWER LEVEL: MAXIMUM MOTHERSHIP! 🍌');
     
     // Log webhook URL for easy setup
     const webhookUrl = `http://localhost:${config.server.port}/webhooks/hubspot`;
     logger.info('🍌 WEBHOOK URL FOR HUBSPOT:', webhookUrl);
     
     // Log AI routing status
-    logger.info('🍌 AI ROUTING STATUS:');
-    logger.info(`  Primary Provider: ${aiHandler.primaryProvider}`);
+    logger.info('🦙 FULL OLLAMA MODE ACTIVATED:');
+    logger.info(`  Primary Provider: ${aiHandler.primaryProvider} (MAXIMUM LOCAL AI)`);
     logger.info(`  Ollama URL: ${aiHandler.ollamaBaseUrl}`);
-    logger.info(`  Fallback Enabled: ${aiHandler.enableFallback}`);
-    logger.info(`  Cost Optimization: Active`);
+    logger.info(`  Fallback Enabled: ${aiHandler.enableFallback} (Emergency only)`);
+    logger.info(`  Cost Optimization: MAXIMUM (Local AI preferred)`);
+    
+    // Log tenant manager status
+    logger.info('🏢 SMART BANANA TENANT MANAGER:');
+    const tenantStats = tenantManager.getStats();
+    logger.info(`  Total Tenants: ${tenantStats.totalTenants}`);
+    logger.info(`  Active Tenants: ${tenantStats.activeTenants}`);
+    logger.info(`  Default Tenant: ${tenantStats.defaultTenant}`);
+    logger.info(`  Tenant Identification: Header/Subdomain/Path/Query`);
+    
+    // Log backup system status
+    logger.info('📦 SMART BANANA BACKUP SYSTEM:');
+    backupSystem.getBackupStats().then(backupStats => {
+      logger.info(`  Total Backups: ${backupStats.totalBackups}`);
+      logger.info(`  Successful Backups: ${backupStats.successfulBackups}`);
+      logger.info(`  Failed Backups: ${backupStats.failedBackups}`);
+      logger.info(`  Scheduler Status: ${backupStats.isRunning ? 'Running' : 'Stopped'}`);
+      logger.info(`  Last Backup: ${backupStats.lastBackupTime ? new Date(backupStats.lastBackupTime).toLocaleString() : 'Never'}`);
+      logger.info(`  Total Backup Size: ${backupStats.formattedTotalBackupSize}`);
+    }).catch(error => {
+      logger.warn('Failed to get backup stats:', error);
+    });
   });
-
-  // Set server for auto-restart manager
-  autoRestart.setServer(server);
+  
+  // Start HTTPS server if available
+  if (httpsSupport.isHttpsAvailable() && config.security.enableHttps) {
+    httpsSupport.startHttpsServer(app, config.security.httpsPort)
+      .then(httpsServer => {
+        if (httpsServer) {
+          logger.info(`🔒 HTTPS server running on port ${config.security.httpsPort}`);
+          logger.info(`🔐 Security: SSL/TLS encryption enabled`);
+          
+          // Set both servers for auto-restart manager
+          autoRestart.setServer(server, httpsServer);
+        }
+      })
+      .catch(error => {
+        logger.error('Failed to start HTTPS server:', error);
+      });
+  } else {
+    // Set only HTTP server for auto-restart manager
+    autoRestart.setServer(server);
+    
+    if (config.server.env === 'production') {
+      logger.warn('⚠️  Production server running without HTTPS! Consider enabling SSL/TLS.');
+    }
+  }
   
   // Start adaptive compression monitoring
   compressionMiddleware.startAdaptiveCompression();
+  
+  // Log security status
+  logger.info('🛡️  SECURITY STATUS:');
+  logger.info(`  Rate Limiting: Enabled (Global, API, Auth, Admin, Monitoring)`);
+  logger.info(`  Security Headers: Enabled`);
+  logger.info(`  Input Validation: Enabled`);
+  logger.info(`  HTTPS Support: ${httpsSupport.isHttpsAvailable() ? 'Available' : 'Not configured'}`);
+  logger.info(`  CORS Protection: Enabled`);
+  logger.info(`  Admin Authentication: ${config.security.adminApiKey ? 'Enabled' : 'Disabled'}`);
+  logger.info('🍌🛡️ PHASE 2 SECURITY STATUS:');
+  logger.info(`  🚨 Threat Detection: ACTIVE (${threatDetection.threatLevel})`);
+  logger.info(`  🔐 Multi-Factor Auth: ENABLED (${bananaMFA.bananaSecurityLevel})`);
+  logger.info(`  🛡️ Zero-Trust Network: OPERATIONAL (${bananaZeroTrust.bananaSecurityLevel})`);
+  logger.info(`  🔍 Vulnerability Scanner: ACTIVE (Auto-scan every 6 hours)`);
+  logger.info(`  📋 Security Audit Logging: COMPREHENSIVE (365-day retention)`);
+  logger.info(`  ✍️ Request Signing: ENABLED (HMAC-SHA256)`);
+  logger.info(`  🍯 Honeypot Traps: SET (${bananaHoneypots.honeypots.size} traps active)`);
+  logger.info(`  🏛️ Security Command Center: OPERATIONAL (${securityCommandCenter.bananaSecurityLevel})`);
+  
+  // Log rate limiting configuration
+  const rateLimitStats = rateLimiting.getStats();
+  logger.info('🛡️  RATE LIMITING CONFIGURATION:');
+  Object.entries(rateLimitStats).forEach(([name, stats]) => {
+    logger.info(`  ${name}: ${stats.max} requests per ${stats.windowMs/1000}s`);
+  });
 
   // Graceful shutdown
   process.on('SIGTERM', () => {

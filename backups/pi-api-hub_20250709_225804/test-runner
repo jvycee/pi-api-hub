@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# 🧪 Pi Test Runner - HubSpot API Testing Powerhouse
+# Quick launcher script
+
+cd "$(dirname "$0")"
+node bin/pi-test-runner.js "$@"
