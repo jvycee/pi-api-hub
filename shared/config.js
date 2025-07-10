@@ -98,12 +98,11 @@ function validateConfig() {
       console.warn('🚨 WARNING: CORS_ORIGINS not set in production! Using default restrictive origins.');
     }
     
-    if (!process.env.SSL_CERT_PATH || !process.env.SSL_KEY_PATH) {
-      console.warn('🚨 WARNING: SSL certificates not configured in production! HTTPS will not be available.');
-    }
-    
-    if (process.env.ENABLE_HTTPS !== 'true') {
-      console.warn('🚨 WARNING: HTTPS not enabled in production! Consider enabling HTTPS for security.');
+    // Only warn about SSL if HTTPS is intended to be enabled
+    if (process.env.ENABLE_HTTPS === 'true') {
+      if (!process.env.SSL_CERT_PATH || !process.env.SSL_KEY_PATH) {
+        console.warn('🚨 WARNING: SSL certificates not configured but HTTPS enabled! HTTPS will not work.');
+      }
     }
   }
 }
