@@ -7,6 +7,7 @@ const chalk = require('chalk');
 class MarkChat {
   constructor() {
     this.piApiUrl = process.env.PI_API_URL || 'http://localhost:3000';
+    this.ollamaUrl = process.env.OLLAMA_URL || 'http://10.0.0.120:11434'; // Your Mac's IP
     this.conversationHistory = [];
     this.markPersonality = {
       name: "Mark",
@@ -56,7 +57,7 @@ class MarkChat {
 
     // Test AI connectivity with simple message
     try {
-      const testResponse = await axios.post(`http://localhost:11434/api/generate`, {
+      const testResponse = await axios.post(`${this.ollamaUrl}/api/generate`, {
         model: 'llama3.2:latest',
         prompt: 'Hello',
         stream: false
@@ -227,7 +228,7 @@ Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h
 User: ${contextualPrompt}
 Mark:`;
 
-      const response = await axios.post(`http://localhost:11434/api/generate`, {
+      const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
         model: 'llama3.2:latest',
         prompt: systemPrompt,
         stream: false,
