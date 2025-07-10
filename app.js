@@ -120,6 +120,9 @@ app.use(cors({
 
 // Standard middleware
 app.use(express.json({ limit: '10mb' })); // Limit JSON payload size
+
+// 🍌 Serve static files for dashboard
+app.use(express.static('public'));
 app.use(compressionMiddleware.middleware());
 app.use(memoryMonitor.middleware());
 app.use(requestQueue.middleware());

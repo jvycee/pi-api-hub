@@ -242,7 +242,10 @@ class APIKeyAuth {
   middleware() {
     return (req, res, next) => {
       // Skip authentication for public endpoints
-      if (req.path === '/health' || req.path === '/setup/admin-key') {
+      if (req.path === '/health' || 
+          req.path === '/setup/admin-key' || 
+          req.path === '/dashboard.html' ||
+          req.path.startsWith('/dashboard')) {
         return next();
       }
       
