@@ -1,3 +1,6 @@
+// Load environment variables first
+require('dotenv').config();
+
 const cluster = require('cluster');
 const os = require('os');
 const config = require('./shared/config');
@@ -91,13 +94,10 @@ class ClusterManager {
   }
 
   forkWorker() {
-    // Pass HTTPS environment variables to worker processes
+    // Pass all environment variables to worker processes
     const workerEnv = {
-      NODE_CLUSTER_WORKER: 'true',
-      ENABLE_HTTPS: process.env.ENABLE_HTTPS,
-      SSL_CERT_PATH: process.env.SSL_CERT_PATH,
-      SSL_KEY_PATH: process.env.SSL_KEY_PATH,
-      HTTPS_PORT: process.env.HTTPS_PORT
+      ...process.env,
+      NODE_CLUSTER_WORKER: 'true'
     };
     
     const worker = cluster.fork(workerEnv);
