@@ -110,6 +110,7 @@ const bananaVulnerabilityScanner = new BananaVulnerabilityScanner();
 const bananaAuditLogger = new BananaAuditLogger();
 const bananaRequestSigning = new BananaRequestSigning();
 const bananaHoneypots = new BananaHoneypots();
+const simpleAuth = new SimpleAuth();
 const securityCommandCenter = new SecurityCommandCenter(threatDetection, simpleAuth, rateLimiting);
 const paginationHelper = new PaginationHelper();
 const cursorPagination = new CursorPagination();
@@ -138,7 +139,6 @@ const enhancedAnalyticsDashboard = new EnhancedAnalyticsDashboard(advancedAnalyt
 const tenantManager = new SimpleTenantManager();
 
 // 🔐 SMART BANANA AUTHENTICATION 🔐
-const simpleAuth = new SimpleAuth();
 
 // 📦 SMART BANANA BACKUP SYSTEM 📦
 const backupSystem = new SimpleBackupSystem();
