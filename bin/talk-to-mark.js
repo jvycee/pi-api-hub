@@ -168,9 +168,7 @@ Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h
             role: 'user',
             content: contextualPrompt
           }
-        ],
-        taskType: 'api_assistance',
-        forceClaude: false // Let it use Ollama for cost efficiency
+        ]
       }, {
         timeout: 60000,
         headers: {
