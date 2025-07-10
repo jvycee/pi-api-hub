@@ -7,6 +7,7 @@ const ResponseHelper = require('./shared/response-helper');
 const MonitoringFactory = require('./shared/monitoring-factory');
 const AuthHandler = require('./middleware/auth-handler');
 const AIFallbackHandler = require('./middleware/ai-fallback-handler');
+const AdminAuth = require('./middleware/admin-auth');
 const MemoryMonitor = require('./middleware/memory-monitor');
 const WebhookHandler = require('./middleware/webhook-handler');
 const CoreStack = require('./middleware/core-stack');
@@ -37,6 +38,7 @@ try {
 const app = express();
 const authHandler = new AuthHandler();
 const aiHandler = new AIFallbackHandler();
+const adminAuth = new AdminAuth();
 const memoryMonitor = new MemoryMonitor();
 const webhookHandler = new WebhookHandler();
 const jsonOptimizer = new JSONOptimizer();
