@@ -24,6 +24,15 @@ const SecurityHeadersMiddleware = require('./middleware/security-headers');
 const InputValidationMiddleware = require('./middleware/input-validation');
 const RateLimitingMiddleware = require('./middleware/rate-limiting');
 const HttpsSupport = require('./middleware/https-support');
+// 🍌 PHASE 2 SECURITY: BANANA MOTHERSHIP LEVEL LOCKDOWN 🍌
+const ThreatDetection = require('./middleware/threat-detection');
+const SecurityCommandCenter = require('./middleware/security-command-center');
+const BananaMFA = require('./middleware/banana-mfa');
+const BananaZeroTrust = require('./middleware/banana-zero-trust');
+const BananaVulnerabilityScanner = require('./middleware/banana-vulnerability-scanner');
+const BananaAuditLogger = require('./middleware/banana-audit-logger');
+const BananaRequestSigning = require('./middleware/banana-request-signing');
+const BananaHoneypots = require('./middleware/banana-honeypots');
 const PaginationHelper = require('./helpers/pagination-helper');
 const CursorPagination = require('./helpers/cursor-pagination');
 const JSONOptimizer = require('./helpers/json-optimizer');
@@ -93,6 +102,15 @@ const inputValidation = new InputValidationMiddleware({
 });
 const rateLimiting = new RateLimitingMiddleware();
 const httpsSupport = new HttpsSupport();
+// 🍌 PHASE 2 SECURITY INSTANCES 🍌
+const threatDetection = new ThreatDetection();
+const bananaMFA = new BananaMFA();
+const bananaZeroTrust = new BananaZeroTrust();
+const bananaVulnerabilityScanner = new BananaVulnerabilityScanner();
+const bananaAuditLogger = new BananaAuditLogger();
+const bananaRequestSigning = new BananaRequestSigning();
+const bananaHoneypots = new BananaHoneypots();
+const securityCommandCenter = new SecurityCommandCenter(threatDetection, simpleAuth, rateLimiting);
 const paginationHelper = new PaginationHelper();
 const cursorPagination = new CursorPagination();
 const logRotator = new LogRotator();
@@ -141,12 +159,16 @@ const requireAdminAuth = adminAuth?.middleware() || ((req, res, next) => {
   next();
 });
 
-// Security middleware first
+// 🍌 PHASE 2 SECURITY: BANANA MOTHERSHIP LEVEL LOCKDOWN 🍌
+// Security middleware first - MAXIMUM BANANA PROTECTION
 app.use(httpsSupport.redirectToHttps());
 app.use(httpsSupport.securityHeaders());
+app.use(bananaHoneypots.honeypotMiddleware()); // Honeypots catch attacks early
+app.use(threatDetection.middleware()); // Threat detection before everything else
 app.use(rateLimiting.globalLimiter());
 app.use(securityHeaders.middleware());
 app.use(inputValidation.middleware());
+app.use(bananaZeroTrust.middleware()); // Zero-trust verification
 
 // 🍌 Tenant identification (early in stack)
 app.use(tenantManager.middleware());
@@ -156,7 +178,17 @@ app.use(cors({
   origin: config.security?.corsOrigins || config.server?.corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key', 'x-tenant-id']
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'x-admin-api-key', 
+    'x-tenant-id',
+    'x-api-key',
+    'x-banana-signature',
+    'x-banana-timestamp', 
+    'x-banana-nonce',
+    'x-mfa-token'
+  ]
 }));
 
 // Standard middleware
@@ -167,6 +199,28 @@ app.use(requestQueue.middleware());
 app.use(jsonOptimizer.middleware());
 app.use(performanceCollector.middleware());
 app.use(analyticsMiddleware.middleware());
+
+// 🍌 Security audit logging middleware
+app.use((req, res, next) => {
+  // Log security events for audit trails
+  if (req.user) {
+    bananaAuditLogger.logAccessControlEvent(
+      req.user.id,
+      req.path,
+      req.method,
+      'GRANTED',
+      {
+        ip: req.ip,
+        path: req.path,
+        method: req.method,
+        userAgent: req.get('User-Agent'),
+        permissions: req.permissions || [],
+        policyApplied: req.bananaZeroTrust?.accessDecision?.policyType || 'default'
+      }
+    );
+  }
+  next();
+});
 
 // Intelligent caching for API endpoints
 app.use('/api/hubspot/contacts', intelligentCache.middleware({
@@ -613,6 +667,156 @@ analyticsDashboard.createEndpoints(app, requireAdminAuth);
 
 // 🍌 ENHANCED ANALYTICS DASHBOARD ENDPOINTS 🍌
 enhancedAnalyticsDashboard.createEndpoints(app, requireAdminAuth);
+
+// 🍌🛡️ PHASE 2 SECURITY DASHBOARD ENDPOINTS 🛡️🍌
+// Security Command Center Dashboard
+app.get('/security/command-center', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => securityCommandCenter.getBananaSecurityDashboard(),
+  { name: 'security-command-center', errorMessage: 'Failed to get security command center dashboard' }
+));
+
+// Threat Detection Dashboard
+app.get('/security/threat-detection', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => threatDetection.getThreatDetectionDashboard(),
+  { name: 'threat-detection', errorMessage: 'Failed to get threat detection dashboard' }
+));
+
+// MFA Dashboard
+app.get('/security/mfa', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaMFA.getBananaMFASecurityReport(),
+  { name: 'mfa-dashboard', errorMessage: 'Failed to get MFA dashboard' }
+));
+
+// Zero Trust Dashboard
+app.get('/security/zero-trust', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaZeroTrust.getBananaZeroTrustDashboard(),
+  { name: 'zero-trust-dashboard', errorMessage: 'Failed to get zero trust dashboard' }
+));
+
+// Vulnerability Scanner Dashboard
+app.get('/security/vulnerability-scanner', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaVulnerabilityScanner.getBananaVulnerabilityDashboard(),
+  { name: 'vulnerability-scanner', errorMessage: 'Failed to get vulnerability scanner dashboard' }
+));
+
+// Audit Logger Dashboard
+app.get('/security/audit-logs', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaAuditLogger.getComplianceDashboard(),
+  { name: 'audit-logs', errorMessage: 'Failed to get audit logs dashboard' }
+));
+
+// Request Signing Dashboard
+app.get('/security/request-signing', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaRequestSigning.getBananaSigningDashboard(),
+  { name: 'request-signing', errorMessage: 'Failed to get request signing dashboard' }
+));
+
+// Honeypots Dashboard
+app.get('/security/honeypots', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => bananaHoneypots.getBananaHoneypotDashboard(),
+  { name: 'honeypots', errorMessage: 'Failed to get honeypots dashboard' }
+));
+
+// 🍌 SECURITY MANAGEMENT ENDPOINTS 🍌
+// Force vulnerability scan
+app.post('/security/vulnerability-scan', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async () => {
+    const scanResults = await bananaVulnerabilityScanner.forceImmediateScan();
+    return { scanResults };
+  },
+  { name: 'force-vulnerability-scan', successMessage: 'Vulnerability scan completed', errorMessage: 'Failed to run vulnerability scan' }
+));
+
+// Generate security report
+app.get('/security/report', requireAdminAuth, MonitoringFactory.createGetEndpoint(
+  () => securityCommandCenter.generateBananaSecurityReport(),
+  { name: 'security-report', errorMessage: 'Failed to generate security report' }
+));
+
+// Ban IP address
+app.post('/security/ban-ip', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { ip, reason, duration } = req.body;
+    if (!ip) throw new Error('IP address is required');
+    
+    const result = bananaHoneypots.manualBanIP(ip, reason || 'Manual ban', duration);
+    bananaAuditLogger.logSecurityEvent('IP_BAN', {
+      ip,
+      reason: reason || 'Manual ban',
+      duration,
+      adminUser: req.user?.id || 'admin'
+    });
+    
+    return result;
+  },
+  { name: 'ban-ip', successMessage: 'IP banned successfully', errorMessage: 'Failed to ban IP' }
+));
+
+// Unban IP address
+app.post('/security/unban-ip', requireAdminAuth, MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { ip } = req.body;
+    if (!ip) throw new Error('IP address is required');
+    
+    const result = bananaHoneypots.unbanIP(ip);
+    bananaAuditLogger.logSecurityEvent('IP_UNBAN', {
+      ip,
+      adminUser: req.user?.id || 'admin'
+    });
+    
+    return result;
+  },
+  { name: 'unban-ip', successMessage: 'IP unbanned successfully', errorMessage: 'Failed to unban IP' }
+));
+
+// MFA Setup for user
+app.post('/security/mfa/setup', simpleAuth.middleware(), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+    
+    const mfaSetup = await bananaMFA.generateBananaMFASecret(userId, userEmail);
+    bananaAuditLogger.logAuthenticationEvent(userId, 'MFA_SETUP_REQUESTED', 'SUCCESS', {
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+    
+    return mfaSetup;
+  },
+  { name: 'mfa-setup', successMessage: 'MFA setup initiated', errorMessage: 'Failed to setup MFA' }
+));
+
+// MFA Verification
+app.post('/security/mfa/verify', simpleAuth.middleware(), MonitoringFactory.createPostEndpoint(
+  async (req) => {
+    const { token } = req.body;
+    const userId = req.user.id;
+    
+    if (!token) throw new Error('MFA token is required');
+    
+    const result = bananaMFA.verifyBananaMFAToken(userId, token);
+    bananaAuditLogger.logAuthenticationEvent(userId, 'MFA_VERIFY', result.verified ? 'SUCCESS' : 'FAILURE', {
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      mfaUsed: true
+    });
+    
+    if (result.verified) {
+      req.session = req.session || {};
+      req.session.mfaVerified = true;
+    }
+    
+    return result;
+  },
+  { name: 'mfa-verify', errorMessage: 'MFA verification failed' }
+));
+
+// Robots.txt with honeypot bait
+app.get('/robots.txt', (req, res) => {
+  const robotsTxt = bananaHoneypots.generateRobotsTxt();
+  res.type('text/plain');
+  res.send(robotsTxt);
+});
 
 // 🍌 SMART BANANA TENANT ENDPOINTS 🍌
 // GET /admin/tenants - List all tenants
@@ -1210,7 +1414,23 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info('  🔄 POST /admin/backups/:id/restore - Restore backup');
     logger.info('  ⏹️  POST /admin/backups/schedule/stop - Stop scheduler');
     logger.info('  ▶️  POST /admin/backups/schedule/start - Start scheduler');
-    logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
+    logger.info('🍌🛡️ PHASE 2 SECURITY: BANANA MOTHERSHIP LEVEL LOCKDOWN 🛡️🍌');
+    logger.info('  🏛️ GET  /security/command-center - Security command center');
+    logger.info('  🚨 GET  /security/threat-detection - Threat detection dashboard');
+    logger.info('  🔐 GET  /security/mfa - Multi-factor authentication');
+    logger.info('  🛡️ GET  /security/zero-trust - Zero-trust security');
+    logger.info('  🔍 GET  /security/vulnerability-scanner - Vulnerability scanner');
+    logger.info('  📋 GET  /security/audit-logs - Security audit logs');
+    logger.info('  ✍️ GET  /security/request-signing - Request signing');
+    logger.info('  🍯 GET  /security/honeypots - Honeypot traps');
+    logger.info('  📊 GET  /security/report - Security report');
+    logger.info('  🔒 POST /security/vulnerability-scan - Force vulnerability scan');
+    logger.info('  🚫 POST /security/ban-ip - Ban IP address');
+    logger.info('  ✅ POST /security/unban-ip - Unban IP address');
+    logger.info('  🔐 POST /security/mfa/setup - Setup MFA');
+    logger.info('  ✅ POST /security/mfa/verify - Verify MFA token');
+    logger.info('  🤖 GET  /robots.txt - Robots.txt with honeypot bait');
+    logger.info('🍌 BANANA POWER LEVEL: MAXIMUM MOTHERSHIP! 🍌');
     
     // Log webhook URL for easy setup
     const webhookUrl = `http://localhost:${config.server.port}/webhooks/hubspot`;
@@ -1280,6 +1500,15 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
   logger.info(`  HTTPS Support: ${httpsSupport.isHttpsAvailable() ? 'Available' : 'Not configured'}`);
   logger.info(`  CORS Protection: Enabled`);
   logger.info(`  Admin Authentication: ${config.security.adminApiKey ? 'Enabled' : 'Disabled'}`);
+  logger.info('🍌🛡️ PHASE 2 SECURITY STATUS:');
+  logger.info(`  🚨 Threat Detection: ACTIVE (${threatDetection.threatLevel})`);
+  logger.info(`  🔐 Multi-Factor Auth: ENABLED (${bananaMFA.bananaSecurityLevel})`);
+  logger.info(`  🛡️ Zero-Trust Network: OPERATIONAL (${bananaZeroTrust.bananaSecurityLevel})`);
+  logger.info(`  🔍 Vulnerability Scanner: ACTIVE (Auto-scan every 6 hours)`);
+  logger.info(`  📋 Security Audit Logging: COMPREHENSIVE (365-day retention)`);
+  logger.info(`  ✍️ Request Signing: ENABLED (HMAC-SHA256)`);
+  logger.info(`  🍯 Honeypot Traps: SET (${bananaHoneypots.honeypots.size} traps active)`);
+  logger.info(`  🏛️ Security Command Center: OPERATIONAL (${securityCommandCenter.bananaSecurityLevel})`);
   
   // Log rate limiting configuration
   const rateLimitStats = rateLimiting.getStats();
