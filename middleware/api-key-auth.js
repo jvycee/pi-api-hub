@@ -241,8 +241,8 @@ class APIKeyAuth {
   // Express middleware function
   middleware() {
     return (req, res, next) => {
-      // Skip authentication for health check (public endpoint)
-      if (req.path === '/health') {
+      // Skip authentication for public endpoints
+      if (req.path === '/health' || req.path === '/setup/admin-key') {
         return next();
       }
       
