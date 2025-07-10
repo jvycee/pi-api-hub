@@ -22,6 +22,8 @@ const SimpleBackupSystem = require('./middleware/simple-backup');
 const AdminAuthMiddleware = require('./middleware/admin-auth');
 const SecurityHeadersMiddleware = require('./middleware/security-headers');
 const InputValidationMiddleware = require('./middleware/input-validation');
+const RateLimitingMiddleware = require('./middleware/rate-limiting');
+const HttpsSupport = require('./middleware/https-support');
 const PaginationHelper = require('./helpers/pagination-helper');
 const CursorPagination = require('./helpers/cursor-pagination');
 const JSONOptimizer = require('./helpers/json-optimizer');
@@ -89,6 +91,8 @@ const inputValidation = new InputValidationMiddleware({
   maxQueryParams: 50,
   sanitizeStrings: true
 });
+const rateLimiting = new RateLimitingMiddleware();
+const httpsSupport = new HttpsSupport();
 const paginationHelper = new PaginationHelper();
 const cursorPagination = new CursorPagination();
 const logRotator = new LogRotator();
@@ -138,6 +142,9 @@ const requireAdminAuth = adminAuth?.middleware() || ((req, res, next) => {
 });
 
 // Security middleware first
+app.use(httpsSupport.redirectToHttps());
+app.use(httpsSupport.securityHeaders());
+app.use(rateLimiting.globalLimiter());
 app.use(securityHeaders.middleware());
 app.use(inputValidation.middleware());
 
@@ -664,7 +671,7 @@ app.get('/admin/tenants/:tenantId', requireAdminAuth, MonitoringFactory.createGe
 
 // 🔐 SMART BANANA AUTHENTICATION ENDPOINTS 🔐
 // POST /auth/login - User login
-app.post('/auth/login', MonitoringFactory.createPostEndpoint(
+app.post('/auth/login', rateLimiting.authLimiter(), MonitoringFactory.createPostEndpoint(
   async (req) => {
     const { identifier, password, tenantId } = req.body;
     
@@ -692,7 +699,7 @@ app.post('/auth/login', MonitoringFactory.createPostEndpoint(
 ));
 
 // POST /auth/refresh - Refresh JWT token
-app.post('/auth/refresh', MonitoringFactory.createPostEndpoint(
+app.post('/auth/refresh', rateLimiting.authLimiter(), MonitoringFactory.createPostEndpoint(
   async (req) => {
     const { refreshToken } = req.body;
     
@@ -876,6 +883,11 @@ app.post('/admin/backups/schedule/start', requireAdminAuth, MonitoringFactory.cr
   },
   { name: 'backup-schedule-start', successMessage: 'Backup scheduler started', errorMessage: 'Failed to start backup scheduler' }
 ));
+
+// Apply rate limiting to API endpoints
+app.use('/api/', rateLimiting.apiLimiter());
+app.use('/monitoring/', rateLimiting.monitoringLimiter());
+app.use('/admin/', rateLimiting.adminLimiter());
 
 // API connection test endpoint - REFACTORED
 app.get('/api/test-connections', MonitoringFactory.createGetEndpoint(
@@ -1149,9 +1161,12 @@ app.use((req, res) => {
 
 // Start server only if not being imported by tests or running as cluster worker
 if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
+  // Start HTTP server
   const server = app.listen(config.server.port, () => {
-    logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌 (GitHub Actions Test)`);
-    logger.info(`Port: ${config.server.port}`);
+    logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌`);
+    logger.info(`🌐 HTTP Port: ${config.server.port}`);
+    logger.info(`🔒 HTTPS Status: ${httpsSupport.isHttpsAvailable() ? 'Available' : 'Not configured'}`);
+    logger.info(`🛡️  Security: Rate limiting enabled, Headers secured`);
     logger.info(`Environment: ${config.server.env}`);
     logger.info(`Mode: ${process.env.NODE_CLUSTER_WORKER ? '4-Core Beast Mode' : 'Single Core'}`);
     logger.info('🚀 MAXIMUM BANANA ENDPOINTS:');
@@ -1229,12 +1244,49 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
       logger.warn('Failed to get backup stats:', error);
     });
   });
-
-  // Set server for auto-restart manager
-  autoRestart.setServer(server);
+  
+  // Start HTTPS server if available
+  if (httpsSupport.isHttpsAvailable() && config.security.enableHttps) {
+    httpsSupport.startHttpsServer(app, config.security.httpsPort)
+      .then(httpsServer => {
+        if (httpsServer) {
+          logger.info(`🔒 HTTPS server running on port ${config.security.httpsPort}`);
+          logger.info(`🔐 Security: SSL/TLS encryption enabled`);
+          
+          // Set both servers for auto-restart manager
+          autoRestart.setServer(server, httpsServer);
+        }
+      })
+      .catch(error => {
+        logger.error('Failed to start HTTPS server:', error);
+      });
+  } else {
+    // Set only HTTP server for auto-restart manager
+    autoRestart.setServer(server);
+    
+    if (config.server.env === 'production') {
+      logger.warn('⚠️  Production server running without HTTPS! Consider enabling SSL/TLS.');
+    }
+  }
   
   // Start adaptive compression monitoring
   compressionMiddleware.startAdaptiveCompression();
+  
+  // Log security status
+  logger.info('🛡️  SECURITY STATUS:');
+  logger.info(`  Rate Limiting: Enabled (Global, API, Auth, Admin, Monitoring)`);
+  logger.info(`  Security Headers: Enabled`);
+  logger.info(`  Input Validation: Enabled`);
+  logger.info(`  HTTPS Support: ${httpsSupport.isHttpsAvailable() ? 'Available' : 'Not configured'}`);
+  logger.info(`  CORS Protection: Enabled`);
+  logger.info(`  Admin Authentication: ${config.security.adminApiKey ? 'Enabled' : 'Disabled'}`);
+  
+  // Log rate limiting configuration
+  const rateLimitStats = rateLimiting.getStats();
+  logger.info('🛡️  RATE LIMITING CONFIGURATION:');
+  Object.entries(rateLimitStats).forEach(([name, stats]) => {
+    logger.info(`  ${name}: ${stats.max} requests per ${stats.windowMs/1000}s`);
+  });
 
   // Graceful shutdown
   process.on('SIGTERM', () => {

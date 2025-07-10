@@ -49,9 +49,25 @@ const config = {
     adminApiKey: process.env.ADMIN_API_KEY,
     enableSecurityHeaders: process.env.ENABLE_SECURITY_HEADERS !== 'false',
     enableInputValidation: process.env.ENABLE_INPUT_VALIDATION !== 'false',
+    enableHttps: process.env.ENABLE_HTTPS === 'true',
+    sslCertPath: process.env.SSL_CERT_PATH,
+    sslKeyPath: process.env.SSL_KEY_PATH,
+    httpsPort: parseInt(process.env.HTTPS_PORT) || 443,
     rateLimitAdmin: {
       windowMs: parseInt(process.env.ADMIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
       max: parseInt(process.env.ADMIN_RATE_LIMIT_MAX_REQUESTS) || 10 // Very restrictive for admin
+    },
+    rateLimitAuth: {
+      windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+      max: parseInt(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS) || 50 // Auth endpoints
+    },
+    rateLimitApi: {
+      windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+      max: parseInt(process.env.API_RATE_LIMIT_MAX_REQUESTS) || 500 // API endpoints
+    },
+    rateLimitMonitoring: {
+      windowMs: parseInt(process.env.MONITORING_RATE_LIMIT_WINDOW_MS) || 1 * 60 * 1000, // 1 minute
+      max: parseInt(process.env.MONITORING_RATE_LIMIT_MAX_REQUESTS) || 60 // Monitoring endpoints
     }
   },
 
@@ -80,6 +96,14 @@ function validateConfig() {
     
     if (!process.env.CORS_ORIGINS) {
       console.warn('🚨 WARNING: CORS_ORIGINS not set in production! Using default restrictive origins.');
+    }
+    
+    if (!process.env.SSL_CERT_PATH || !process.env.SSL_KEY_PATH) {
+      console.warn('🚨 WARNING: SSL certificates not configured in production! HTTPS will not be available.');
+    }
+    
+    if (process.env.ENABLE_HTTPS !== 'true') {
+      console.warn('🚨 WARNING: HTTPS not enabled in production! Consider enabling HTTPS for security.');
     }
   }
 }
