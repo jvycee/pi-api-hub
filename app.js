@@ -8,6 +8,11 @@ const MonitoringFactory = require('./shared/monitoring-factory');
 const AuthHandler = require('./middleware/auth-handler');
 const AIFallbackHandler = require('./middleware/ai-fallback-handler');
 const AdminAuth = require('./middleware/admin-auth');
+const SecurityHeadersMiddleware = require('./middleware/security-headers');
+const InputValidationMiddleware = require('./middleware/input-validation');
+const CompressionMiddleware = require('./middleware/compression');
+const RequestQueue = require('./middleware/request-queue');
+const IntelligentCache = require('./middleware/intelligent-cache');
 const MemoryMonitor = require('./middleware/memory-monitor');
 const WebhookHandler = require('./middleware/webhook-handler');
 const CoreStack = require('./middleware/core-stack');
@@ -39,6 +44,15 @@ const app = express();
 const authHandler = new AuthHandler();
 const aiHandler = new AIFallbackHandler();
 const adminAuth = new AdminAuth();
+const securityHeaders = new SecurityHeadersMiddleware();
+const inputValidation = new InputValidationMiddleware({
+  maxBodySize: 10 * 1024 * 1024, // 10MB
+  maxQueryParams: 50,
+  sanitizeStrings: true
+});
+const compressionMiddleware = new CompressionMiddleware();
+const requestQueue = new RequestQueue();
+const intelligentCache = new IntelligentCache();
 const memoryMonitor = new MemoryMonitor();
 const webhookHandler = new WebhookHandler();
 const jsonOptimizer = new JSONOptimizer();
