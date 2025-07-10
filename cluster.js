@@ -77,16 +77,26 @@ class ClusterManager {
       logger.info(`Worker ${process.pid} started`);
       
       // Send periodic health updates to master
-      setInterval(() => {
-        if (process.send) {
-          process.send({
-            type: 'health',
-            pid: process.pid,
-            memory: process.memoryUsage(),
-            uptime: process.uptime()
-          });
+      const healthInterval = setInterval(() => {
+        try {
+          if (process.send && process.connected) {
+            process.send({
+              type: 'health',
+              pid: process.pid,
+              memory: process.memoryUsage(),
+              uptime: process.uptime()
+            });
+          }
+        } catch (error) {
+          // Silently handle IPC errors - worker is likely shutting down
+          clearInterval(healthInterval);
         }
       }, 10000); // Every 10 seconds
+      
+      // Clean up interval on disconnect
+      process.on('disconnect', () => {
+        clearInterval(healthInterval);
+      });
     }
   }
 
@@ -104,6 +114,9 @@ class ClusterManager {
       uptime: 0,
       lastHealthCheck: Date.now()
     };
+
+    // Setup IPC handlers for this worker
+    this.setupWorkerIPC(worker);
 
     return worker;
   }
@@ -162,8 +175,15 @@ class ClusterManager {
   }
 
   setupIPCHandlers() {
+    // Setup IPC handlers for all existing workers
     Object.values(this.workers).forEach(({ worker }) => {
-      worker.on('message', (message) => {
+      this.setupWorkerIPC(worker);
+    });
+  }
+
+  setupWorkerIPC(worker) {
+    worker.on('message', (message) => {
+      try {
         if (message.type === 'health') {
           this.workerStats[worker.id] = {
             pid: message.pid,
@@ -172,7 +192,13 @@ class ClusterManager {
             lastHealthCheck: Date.now()
           };
         }
-      });
+      } catch (error) {
+        logger.warn(`Error handling message from worker ${worker.id}:`, error.message);
+      }
+    });
+    
+    worker.on('error', (error) => {
+      logger.warn(`Worker ${worker.id} error:`, error.message);
     });
   }
 
