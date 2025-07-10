@@ -91,7 +91,16 @@ class ClusterManager {
   }
 
   forkWorker() {
-    const worker = cluster.fork({ NODE_CLUSTER_WORKER: 'true' });
+    // Pass HTTPS environment variables to worker processes
+    const workerEnv = {
+      NODE_CLUSTER_WORKER: 'true',
+      ENABLE_HTTPS: process.env.ENABLE_HTTPS,
+      SSL_CERT_PATH: process.env.SSL_CERT_PATH,
+      SSL_KEY_PATH: process.env.SSL_KEY_PATH,
+      HTTPS_PORT: process.env.HTTPS_PORT
+    };
+    
+    const worker = cluster.fork(workerEnv);
     this.workers[worker.id] = {
       worker,
       startTime: Date.now(),
