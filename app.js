@@ -8,6 +8,7 @@ const MonitoringFactory = require('./shared/monitoring-factory');
 const AuthHandler = require('./middleware/auth-handler');
 const AIFallbackHandler = require('./middleware/ai-fallback-handler');
 const AdminAuth = require('./middleware/admin-auth');
+const APIKeyAuth = require('./middleware/api-key-auth');
 const SecurityHeadersMiddleware = require('./middleware/security-headers');
 const InputValidationMiddleware = require('./middleware/input-validation');
 const CompressionMiddleware = require('./middleware/compression');
@@ -47,6 +48,7 @@ const app = express();
 const authHandler = new AuthHandler();
 const aiHandler = new AIFallbackHandler();
 const adminAuth = new AdminAuth();
+const apiKeyAuth = new APIKeyAuth();
 const securityHeaders = new SecurityHeadersMiddleware();
 const inputValidation = new InputValidationMiddleware({
   maxBodySize: 10 * 1024 * 1024, // 10MB
@@ -105,12 +107,15 @@ const requireAdminAuth = adminAuth?.middleware() || ((req, res, next) => {
 app.use(securityHeaders.middleware());
 app.use(inputValidation.middleware());
 
+// 🍌 BANANA-POWERED API KEY AUTHENTICATION 🍌
+app.use(apiKeyAuth.middleware());
+
 // CORS with secure origins
 app.use(cors({
   origin: config.security?.corsOrigins || config.server?.corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key', 'x-api-key']
 }));
 
 // Standard middleware
@@ -814,6 +819,10 @@ app.all('/api/hubspot/*', async (req, res) => {
     });
   }
 });
+
+// 🍌 BANANA-POWERED API KEY MANAGEMENT ROUTES 🍌
+const apiKeyRoutes = require('./routes/api-keys')(apiKeyAuth);
+app.use('/api/keys', apiKeyRoutes);
 
 // Error handling middleware
 app.use((error, req, res, next) => {

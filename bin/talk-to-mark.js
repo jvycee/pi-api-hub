@@ -314,11 +314,18 @@ Mark:`;
         const monitoringResponse = await axios.get(`${this.piApiUrl}/monitoring/dashboard`, { timeout: 5000 });
         const dashboard = monitoringResponse.data;
         
+        // Debug: Log memory structure if values are undefined
+        if (!dashboard.system?.memory?.usedMB) {
+          console.log(chalk.yellow('Debug - Memory structure:'), JSON.stringify(dashboard.system?.memory, null, 2));
+        }
+        
         console.log(chalk.green('🐐 Performance Metrics:'));
-        console.log(chalk.white(`   Memory Usage: ${chalk.cyan(dashboard.system.memory.usedMB)}MB / ${dashboard.system.memory.totalMB}MB`));
-        console.log(chalk.white(`   CPU Load: ${chalk.cyan(dashboard.system.cpu.usage)}%`));
-        console.log(chalk.white(`   Active APIs: ${chalk.cyan(Object.keys(dashboard.apis).length)}`));
-        console.log(chalk.white(`   🍌 Banana Status: ${chalk.yellow(dashboard.status)}`));
+        const memoryUsed = dashboard.system?.memory?.usedMB || 'N/A';
+        const memoryTotal = dashboard.system?.memory?.totalMB || 'N/A';
+        console.log(chalk.white(`   Memory Usage: ${chalk.cyan(memoryUsed)}MB / ${memoryTotal}MB`));
+        console.log(chalk.white(`   CPU Load: ${chalk.cyan(dashboard.system?.cpu?.usage || 'N/A')}%`));
+        console.log(chalk.white(`   Active APIs: ${chalk.cyan(Object.keys(dashboard.apis || {}).length)}`));
+        console.log(chalk.white(`   🍌 Banana Status: ${chalk.yellow(dashboard.status || 'BANANA POWERED')}`));
       } catch (monitoringError) {
         console.log(chalk.yellow('   (Detailed monitoring unavailable)'));
       }

@@ -248,6 +248,9 @@ class PerformanceCollector {
           totalGB: (latestMemory.total / (1024 * 1024 * 1024)).toFixed(2),
           usedGB: (latestMemory.used / (1024 * 1024 * 1024)).toFixed(2),
           freeGB: (latestMemory.free / (1024 * 1024 * 1024)).toFixed(2),
+          totalMB: (latestMemory.total / (1024 * 1024)).toFixed(0),
+          usedMB: (latestMemory.used / (1024 * 1024)).toFixed(0),
+          freeMB: (latestMemory.free / (1024 * 1024)).toFixed(0),
           usagePercentage: latestMemory.usagePercentage.toFixed(2),
           processHeapMB: (latestMemory.process.heapUsed / (1024 * 1024)).toFixed(2),
           heapUtilization: latestMemory.process.heapUtilization.toFixed(2)
