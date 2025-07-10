@@ -824,6 +824,20 @@ app.all('/api/hubspot/*', async (req, res) => {
 const apiKeyRoutes = require('./routes/api-keys')(apiKeyAuth);
 app.use('/api/keys', apiKeyRoutes);
 
+// Temporary setup endpoint to get admin key (REMOVE IN PRODUCTION!)
+app.get('/setup/admin-key', (req, res) => {
+  const adminKeys = apiKeyAuth.getAllKeys().filter(k => k.tier === 'admin');
+  if (adminKeys.length > 0) {
+    res.json({
+      success: true,
+      adminKey: adminKeys[0].fullKey,
+      warning: '🍌 This is for setup only - remove this endpoint in production!'
+    });
+  } else {
+    res.json({ success: false, error: 'No admin keys found' });
+  }
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
   logger.error('Unhandled error:', error);
