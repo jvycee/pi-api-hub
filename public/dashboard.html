@@ -371,21 +371,21 @@
             </div>
             
             <div class="panel">
-                <div class="panel-header">🐐 MARK AI ACTIVITY</div>
+                <div class="panel-header">🐐 OLLAMA & MARK STATUS</div>
                 <div class="metric">
-                    <span class="metric-label">🤖 AI Requests:</span>
-                    <span class="metric-value" id="ai-requests">-</span>
+                    <span class="metric-label">🤖 Ollama Health:</span>
+                    <span class="metric-value" id="ollama-health">-</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">🍌 Ollama Usage:</span>
-                    <span class="metric-value" id="ollama-usage">-</span>
+                    <span class="metric-label">🐐 Mark Status:</span>
+                    <span class="metric-value" id="mark-status">-</span>
                 </div>
                 <div class="metric">
-                    <span class="metric-label">💰 Cost Savings:</span>
-                    <span class="metric-value" id="cost-savings">-</span>
+                    <span class="metric-label">🧠 Active Model:</span>
+                    <span class="metric-value" id="active-model">-</span>
                 </div>
                 <div class="chart-container" id="ai-chart">
-                    <div class="loading">🍌 Loading AI metrics...</div>
+                    <div class="loading">🍌 Loading Ollama status...</div>
                 </div>
             </div>
             
@@ -625,25 +625,42 @@
             }
             
             async loadAIData() {
+                let ollamaHealthy = false;
+                let activeModel = 'Unknown';
+                
                 try {
-                    const monitoring = await fetch('/monitoring/metrics');
-                    const data = await monitoring.json();
+                    // Check Ollama health directly
+                    const ollamaResponse = await fetch('http://10.0.0.120:11434/api/tags', {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
                     
-                    if (data.success && data.data.apis?.anthropic) {
-                        const ai = data.data.apis.anthropic;
-                        document.getElementById('ai-requests').textContent = ai.totalCalls || 0;
-                        document.getElementById('ollama-usage').textContent = '🍌 95%';
-                        document.getElementById('cost-savings').textContent = '$12.50';
+                    if (ollamaResponse.ok) {
+                        const ollamaData = await ollamaResponse.json();
+                        ollamaHealthy = true;
                         
-                        // Update AI chart with activity visualization
-                        this.updateAIChart(ai);
+                        // Find the active model (look for llama3.2:latest or similar)
+                        const models = ollamaData.models || [];
+                        const defaultModel = models.find(m => m.name.includes('llama3.2:latest')) || 
+                                           models.find(m => m.name.includes('llama3.2')) ||
+                                           models[0];
+                        activeModel = defaultModel ? defaultModel.name : 'No models found';
+                        
+                        document.getElementById('ollama-health').textContent = '🟢 HEALTHY';
+                        document.getElementById('mark-status').textContent = '🐐 READY TO CHAT';
+                        document.getElementById('active-model').textContent = activeModel;
+                        
+                        this.updateOllamaChart({ healthy: true, modelCount: models.length, activeModel });
                     } else {
-                        // No data available, show status
-                        this.updateAIChart({ totalCalls: 0 });
+                        throw new Error('Ollama not responding');
                     }
                 } catch (error) {
-                    console.error('Error loading AI data:', error);
-                    this.updateAIChart({ totalCalls: 0 });
+                    console.error('Error checking Ollama health:', error);
+                    document.getElementById('ollama-health').textContent = '🔴 OFFLINE';
+                    document.getElementById('mark-status').textContent = '😴 UNAVAILABLE';
+                    document.getElementById('active-model').textContent = 'N/A';
+                    
+                    this.updateOllamaChart({ healthy: false, modelCount: 0, activeModel: 'N/A' });
                 }
             }
             
@@ -768,38 +785,40 @@
                 }
             }
             
-            updateAIChart(aiData) {
+            updateOllamaChart(ollamaData) {
                 const chartContainer = document.getElementById('ai-chart');
-                const totalRequests = aiData.totalCalls || 0;
                 
-                if (totalRequests === 0) {
+                if (!ollamaData.healthy) {
                     chartContainer.innerHTML = `
-                        <div style="text-align: center; padding: 40px; color: #00ffff;">
-                            <div style="font-size: 2em; margin-bottom: 10px;">🤖</div>
-                            <div>No AI requests yet</div>
-                            <div style="font-size: 0.9em; margin-top: 5px; color: #ffff00;">Mark is ready to chat!</div>
+                        <div style="text-align: center; padding: 40px; color: #ff0000;">
+                            <div style="font-size: 2em; margin-bottom: 10px;">😴</div>
+                            <div>Ollama Offline</div>
+                            <div style="font-size: 0.9em; margin-top: 5px; color: #ffff00;">Mark unavailable</div>
                         </div>
                     `;
                 } else {
-                    // Create AI activity visualization
-                    const ollamaUsage = 95; // 95% Ollama usage as shown in metrics
-                    const anthropicUsage = 5; // 5% Anthropic usage
+                    const modelCount = ollamaData.modelCount || 0;
+                    const activeModel = ollamaData.activeModel || 'Unknown';
                     
                     chartContainer.innerHTML = `
                         <div style="padding: 20px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                                <span style="color: #00ff00;">🍌 Ollama: ${ollamaUsage}%</span>
-                                <span style="color: #ffff00;">🤖 Anthropic: ${anthropicUsage}%</span>
+                                <span style="color: #00ff00;">🟢 Status: Online</span>
+                                <span style="color: #ffff00;">🧠 Models: ${modelCount}</span>
                             </div>
-                            <div style="background: rgba(0,0,0,0.5); border-radius: 10px; overflow: hidden; height: 20px;">
-                                <div style="background: linear-gradient(90deg, #00ff00, #32cd32); height: 100%; width: ${ollamaUsage}%; float: left; transition: width 0.3s ease;"></div>
-                                <div style="background: linear-gradient(90deg, #ffff00, #ffa500); height: 100%; width: ${anthropicUsage}%; float: left; transition: width 0.3s ease;"></div>
+                            <div style="background: rgba(0,255,0,0.2); border: 1px solid #00ff00; border-radius: 10px; padding: 10px; margin-bottom: 10px;">
+                                <div style="text-align: center; color: #00ff00; font-size: 0.9em;">
+                                    Active Model
+                                </div>
+                                <div style="text-align: center; color: #ffff00; font-weight: bold; margin-top: 5px;">
+                                    ${activeModel}
+                                </div>
                             </div>
                             <div style="text-align: center; margin-top: 10px; color: #00ffff; font-size: 0.9em;">
-                                Cost-Optimized AI Routing
+                                Direct Ollama Connection
                             </div>
                             <div style="text-align: center; margin-top: 5px; color: #ffff00; font-size: 1.2em;">
-                                🐐 Mark is Active
+                                🐐 Mark Ready for Chat!
                             </div>
                         </div>
                     `;
