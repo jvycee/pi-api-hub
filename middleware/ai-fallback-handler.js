@@ -6,7 +6,7 @@ class AIFallbackHandler {
   constructor(options = {}) {
     this.anthropicApiKey = options.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
     this.ollamaBaseUrl = options.ollamaBaseUrl || 'http://localhost:11434';
-    this.defaultModel = options.defaultModel || 'llama3.1:8b';
+    this.defaultModel = options.defaultModel || 'llama3.2:latest';
     this.primaryProvider = options.primaryProvider || 'ollama'; // Default to Ollama
     this.enableFallback = options.enableFallback !== false;
     this.maxRetries = options.maxRetries || 2;
