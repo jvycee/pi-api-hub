@@ -15,7 +15,9 @@ const RequestQueue = require('./middleware/request-queue');
 const IntelligentCache = require('./middleware/intelligent-cache');
 const MemoryMonitor = require('./middleware/memory-monitor');
 const WebhookHandler = require('./middleware/webhook-handler');
-const CoreStack = require('./middleware/core-stack');
+const StreamingHandler = require('./middleware/streaming-handler');
+const RequestDeduplicationBatcher = require('./middleware/request-deduplication');
+const AnalyticsMiddleware = require('./middleware/analytics-middleware');
 const SimpleTenantManager = require('./middleware/simple-tenant');
 const SimpleAuth = require('./middleware/simple-auth');
 const SimpleBackupSystem = require('./middleware/simple-backup');
@@ -27,7 +29,6 @@ const LogRotator = require('./monitoring/log-rotator');
 const PerformanceCollector = require('./monitoring/performance-collector');
 const PredictiveHealthMonitor = require('./monitoring/predictive-health-monitor');
 const AutoRestartManager = require('./monitoring/auto-restart');
-const AnalyticsMiddleware = require('./middleware/analytics-middleware');
 const AnalyticsDashboard = require('./analytics/analytics-dashboard');
 const AdvancedAnalyticsEngine = require('./analytics/advanced-analytics-engine');
 const EnhancedAnalyticsDashboard = require('./analytics/enhanced-analytics-dashboard');
@@ -56,9 +57,10 @@ const intelligentCache = new IntelligentCache();
 const memoryMonitor = new MemoryMonitor();
 const webhookHandler = new WebhookHandler();
 const jsonOptimizer = new JSONOptimizer();
-
-// Initialize optimized middleware stacks
-const coreStack = new CoreStack(config, jsonOptimizer);
+const streamingHandler = new StreamingHandler({ jsonOptimizer });
+const requestDeduplicationBatcher = new RequestDeduplicationBatcher({
+  intelligentCache: intelligentCache
+});
 const paginationHelper = new PaginationHelper();
 const cursorPagination = new CursorPagination();
 const logRotator = new LogRotator();
