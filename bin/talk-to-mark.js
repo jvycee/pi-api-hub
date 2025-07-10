@@ -140,10 +140,7 @@ class MarkChat {
       const response = await axios.post(`${this.piApiUrl}/api/anthropic/messages`, {
         model: 'llama3.2:latest',
         max_tokens: 2000,
-        messages: [
-          {
-            role: 'system',
-            content: `You are Mark, an expert AI assistant specializing in API testing, webhooks, and the Pi API Hub infrastructure. 
+        system: `You are Mark, an expert AI assistant specializing in API testing, webhooks, and the Pi API Hub infrastructure. 
 
 Your personality: ${this.markPersonality.personality}
 
@@ -165,8 +162,8 @@ Instructions:
 - Use emojis sparingly but appropriately (🐐 for yourself, 🍌 for Pi infrastructure)
 - Be concise but thorough in explanations
 
-Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h.role}: ${h.content}`).join('\n')}`
-          },
+Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h.role}: ${h.content}`).join('\n')}`,
+        messages: [
           {
             role: 'user',
             content: contextualPrompt
