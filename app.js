@@ -841,6 +841,53 @@ app.get('/setup/admin-key', (req, res) => {
   }
 });
 
+// 🐐 Ollama & Mark status endpoint
+app.get('/monitoring/ollama-status', async (req, res) => {
+  try {
+    const axios = require('axios');
+    const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+    
+    // Check Ollama health
+    const ollamaResponse = await axios.get(`${ollamaUrl}/api/tags`, { 
+      timeout: 5000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const models = ollamaResponse.data.models || [];
+    const defaultModel = models.find(m => m.name.includes('llama3.2:latest')) || 
+                        models.find(m => m.name.includes('llama3.2')) ||
+                        models[0];
+    
+    res.json({
+      success: true,
+      data: {
+        ollamaHealthy: true,
+        markStatus: 'ready',
+        activeModel: defaultModel ? defaultModel.name : 'No models found',
+        modelCount: models.length,
+        models: models.map(m => ({ name: m.name, size: m.size })),
+        ollamaUrl: ollamaUrl
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    logger.error('Ollama health check failed:', error.message);
+    res.json({
+      success: true, // Still return success but with offline status
+      data: {
+        ollamaHealthy: false,
+        markStatus: 'unavailable',
+        activeModel: 'N/A',
+        modelCount: 0,
+        models: [],
+        error: error.message
+      },
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
   logger.error('Unhandled error:', error);

@@ -625,34 +625,37 @@
             }
             
             async loadAIData() {
-                let ollamaHealthy = false;
-                let activeModel = 'Unknown';
-                
                 try {
-                    // Check Ollama health directly
-                    const ollamaResponse = await fetch('http://10.0.0.120:11434/api/tags', {
-                        method: 'GET',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
+                    // Check Ollama health via Pi API Hub proxy
+                    const ollamaResponse = await fetch('/monitoring/ollama-status');
+                    const data = await ollamaResponse.json();
                     
-                    if (ollamaResponse.ok) {
-                        const ollamaData = await ollamaResponse.json();
-                        ollamaHealthy = true;
+                    if (data.success && data.data) {
+                        const ollama = data.data;
                         
-                        // Find the active model (look for llama3.2:latest or similar)
-                        const models = ollamaData.models || [];
-                        const defaultModel = models.find(m => m.name.includes('llama3.2:latest')) || 
-                                           models.find(m => m.name.includes('llama3.2')) ||
-                                           models[0];
-                        activeModel = defaultModel ? defaultModel.name : 'No models found';
-                        
-                        document.getElementById('ollama-health').textContent = '🟢 HEALTHY';
-                        document.getElementById('mark-status').textContent = '🐐 READY TO CHAT';
-                        document.getElementById('active-model').textContent = activeModel;
-                        
-                        this.updateOllamaChart({ healthy: true, modelCount: models.length, activeModel });
+                        if (ollama.ollamaHealthy) {
+                            document.getElementById('ollama-health').textContent = '🟢 HEALTHY';
+                            document.getElementById('mark-status').textContent = '🐐 READY TO CHAT';
+                            document.getElementById('active-model').textContent = ollama.activeModel;
+                            
+                            this.updateOllamaChart({ 
+                                healthy: true, 
+                                modelCount: ollama.modelCount, 
+                                activeModel: ollama.activeModel 
+                            });
+                        } else {
+                            document.getElementById('ollama-health').textContent = '🔴 OFFLINE';
+                            document.getElementById('mark-status').textContent = '😴 UNAVAILABLE';
+                            document.getElementById('active-model').textContent = 'N/A';
+                            
+                            this.updateOllamaChart({ 
+                                healthy: false, 
+                                modelCount: 0, 
+                                activeModel: 'N/A' 
+                            });
+                        }
                     } else {
-                        throw new Error('Ollama not responding');
+                        throw new Error('Failed to get Ollama status');
                     }
                 } catch (error) {
                     console.error('Error checking Ollama health:', error);
