@@ -15,7 +15,9 @@
         "test:integration": "jest tests/integration/",
         "test:benchmarks": "BENCHMARK_MODE=true jest tests/benchmarks/",
         "test:watch": "jest --watch",
-        "test:coverage": "jest --coverage"
+        "test:coverage": "jest --coverage",
+        "mark": "node bin/talk-to-mark.js",
+        "chat": "node bin/talk-to-mark.js"
     },
     "keywords": [
         "api",
@@ -30,6 +32,7 @@
         "@modelcontextprotocol/sdk": "^0.4.0",
         "axios": "^1.6.2",
         "bcryptjs": "^3.0.2",
+        "chalk": "^5.4.1",
         "cors": "^2.8.5",
         "dotenv": "^16.3.1",
         "express": "^4.18.2",
