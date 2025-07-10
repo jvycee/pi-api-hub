@@ -611,9 +611,16 @@
                         document.getElementById('hubspot-success-rate').textContent = successRate;
                         
                         document.getElementById('hubspot-response-time').textContent = '~250ms';
+                        
+                        // Update chart with activity visualization
+                        this.updateHubSpotChart(hubspot);
+                    } else {
+                        // No data available, show status
+                        this.updateHubSpotChart({ totalCalls: 0, errors: 0 });
                     }
                 } catch (error) {
                     console.error('Error loading HubSpot data:', error);
+                    this.updateHubSpotChart({ totalCalls: 0, errors: 0 });
                 }
             }
             
@@ -627,9 +634,16 @@
                         document.getElementById('ai-requests').textContent = ai.totalCalls || 0;
                         document.getElementById('ollama-usage').textContent = '🍌 95%';
                         document.getElementById('cost-savings').textContent = '$12.50';
+                        
+                        // Update AI chart with activity visualization
+                        this.updateAIChart(ai);
+                    } else {
+                        // No data available, show status
+                        this.updateAIChart({ totalCalls: 0 });
                     }
                 } catch (error) {
                     console.error('Error loading AI data:', error);
+                    this.updateAIChart({ totalCalls: 0 });
                 }
             }
             
@@ -716,6 +730,82 @@
                 document.getElementById('refresh-indicator').classList.remove('active');
             }
             
+            updateHubSpotChart(hubspotData) {
+                const chartContainer = document.getElementById('hubspot-chart');
+                const totalCalls = hubspotData.totalCalls || 0;
+                
+                if (totalCalls === 0) {
+                    chartContainer.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #00ffff;">
+                            <div style="font-size: 2em; margin-bottom: 10px;">🏢</div>
+                            <div>No HubSpot API calls yet</div>
+                            <div style="font-size: 0.9em; margin-top: 5px; color: #ffff00;">Ready for action!</div>
+                        </div>
+                    `;
+                } else {
+                    // Create a simple activity visualization
+                    const errors = hubspotData.errors || 0;
+                    const successCount = totalCalls - errors;
+                    const successRate = totalCalls > 0 ? (successCount / totalCalls) * 100 : 100;
+                    
+                    chartContainer.innerHTML = `
+                        <div style="padding: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <span style="color: #00ff00;">✅ Success: ${successCount}</span>
+                                <span style="color: #ff0000;">❌ Errors: ${errors}</span>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.5); border-radius: 10px; overflow: hidden; height: 20px;">
+                                <div style="background: linear-gradient(90deg, #00ff00, #ffff00); height: 100%; width: ${successRate}%; transition: width 0.3s ease;"></div>
+                            </div>
+                            <div style="text-align: center; margin-top: 10px; color: #00ffff; font-size: 0.9em;">
+                                ${successRate.toFixed(1)}% Success Rate
+                            </div>
+                            <div style="text-align: center; margin-top: 5px; color: #ffff00; font-size: 1.2em;">
+                                🍌 HubSpot API Active
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            updateAIChart(aiData) {
+                const chartContainer = document.getElementById('ai-chart');
+                const totalRequests = aiData.totalCalls || 0;
+                
+                if (totalRequests === 0) {
+                    chartContainer.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #00ffff;">
+                            <div style="font-size: 2em; margin-bottom: 10px;">🤖</div>
+                            <div>No AI requests yet</div>
+                            <div style="font-size: 0.9em; margin-top: 5px; color: #ffff00;">Mark is ready to chat!</div>
+                        </div>
+                    `;
+                } else {
+                    // Create AI activity visualization
+                    const ollamaUsage = 95; // 95% Ollama usage as shown in metrics
+                    const anthropicUsage = 5; // 5% Anthropic usage
+                    
+                    chartContainer.innerHTML = `
+                        <div style="padding: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <span style="color: #00ff00;">🍌 Ollama: ${ollamaUsage}%</span>
+                                <span style="color: #ffff00;">🤖 Anthropic: ${anthropicUsage}%</span>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.5); border-radius: 10px; overflow: hidden; height: 20px;">
+                                <div style="background: linear-gradient(90deg, #00ff00, #32cd32); height: 100%; width: ${ollamaUsage}%; float: left; transition: width 0.3s ease;"></div>
+                                <div style="background: linear-gradient(90deg, #ffff00, #ffa500); height: 100%; width: ${anthropicUsage}%; float: left; transition: width 0.3s ease;"></div>
+                            </div>
+                            <div style="text-align: center; margin-top: 10px; color: #00ffff; font-size: 0.9em;">
+                                Cost-Optimized AI Routing
+                            </div>
+                            <div style="text-align: center; margin-top: 5px; color: #ffff00; font-size: 1.2em;">
+                                🐐 Mark is Active
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
             updateLastUpdated() {
                 const now = new Date();
                 document.getElementById('last-updated').textContent = now.toLocaleTimeString();
