@@ -102,6 +102,9 @@ const inputValidation = new InputValidationMiddleware({
 });
 const rateLimiting = new RateLimitingMiddleware();
 const httpsSupport = new HttpsSupport();
+// 🔐 SMART BANANA AUTHENTICATION 🔐
+const simpleAuth = new SimpleAuth();
+
 // 🍌 PHASE 2 SECURITY INSTANCES 🍌
 const threatDetection = new ThreatDetection();
 const bananaMFA = new BananaMFA();
@@ -110,7 +113,6 @@ const bananaVulnerabilityScanner = new BananaVulnerabilityScanner();
 const bananaAuditLogger = new BananaAuditLogger();
 const bananaRequestSigning = new BananaRequestSigning();
 const bananaHoneypots = new BananaHoneypots();
-const simpleAuth = new SimpleAuth();
 const securityCommandCenter = new SecurityCommandCenter(threatDetection, simpleAuth, rateLimiting);
 const paginationHelper = new PaginationHelper();
 const cursorPagination = new CursorPagination();
@@ -137,8 +139,6 @@ const enhancedAnalyticsDashboard = new EnhancedAnalyticsDashboard(advancedAnalyt
 
 // 🍌 SMART BANANA TENANT MANAGER 🍌
 const tenantManager = new SimpleTenantManager();
-
-// 🔐 SMART BANANA AUTHENTICATION 🔐
 
 // 📦 SMART BANANA BACKUP SYSTEM 📦
 const backupSystem = new SimpleBackupSystem();
