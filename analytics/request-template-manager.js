@@ -393,7 +393,7 @@ class RequestTemplateManager {
         content: prompt
       }], {
         taskType: 'analysis',
-        model: 'llama3.1:8b'
+        model: 'llama3.2:latest'
       });
       
       // Parse and store suggestions
