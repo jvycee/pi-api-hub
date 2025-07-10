@@ -245,7 +245,8 @@ class APIKeyAuth {
       if (req.path === '/health' || 
           req.path === '/setup/admin-key' || 
           req.path === '/dashboard.html' ||
-          req.path.startsWith('/dashboard')) {
+          req.path.startsWith('/dashboard') ||
+          req.path.startsWith('/monitoring/')) {
         return next();
       }
       
