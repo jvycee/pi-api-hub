@@ -35,8 +35,18 @@ class ClusterManager {
   }
 
   start() {
-    if (cluster.isMaster) {
+    if (cluster.isMaster || cluster.isPrimary) {
       logger.info(`Master process ${process.pid} starting with ${this.numCPUs} workers`);
+      
+      // Handle uncaught exceptions in master
+      process.on('uncaughtException', (error) => {
+        logger.error(`Master uncaught exception:`, error);
+        this.shutdown();
+      });
+      
+      process.on('unhandledRejection', (reason, promise) => {
+        logger.error(`Master unhandled rejection:`, reason);
+      });
       
       // Fork optimized number of workers
       for (let i = 0; i < this.targetWorkers; i++) {
@@ -75,6 +85,17 @@ class ClusterManager {
       // Worker process - start the actual application
       const app = require('./app');
       logger.info(`Worker ${process.pid} started`);
+      
+      // Handle uncaught exceptions in worker
+      process.on('uncaughtException', (error) => {
+        logger.error(`Worker ${process.pid} uncaught exception:`, error);
+        process.exit(1);
+      });
+      
+      process.on('unhandledRejection', (reason, promise) => {
+        logger.error(`Worker ${process.pid} unhandled rejection:`, reason);
+        process.exit(1);
+      });
       
       // Send periodic health updates to master
       const healthInterval = setInterval(() => {
@@ -147,31 +168,44 @@ class ClusterManager {
   setupGracefulShutdown() {
     const shutdown = (signal) => {
       logger.info(`Master received ${signal}. Shutting down gracefully...`);
-      
-      // Disconnect all workers
-      Object.values(this.workers).forEach(({ worker }) => {
-        worker.disconnect();
-      });
-
-      // Give workers time to finish current requests
-      setTimeout(() => {
-        Object.values(this.workers).forEach(({ worker }) => {
-          if (!worker.isDead()) {
-            logger.warn(`Killing worker ${worker.process.pid}`);
-            worker.kill();
-          }
-        });
-        
-        setTimeout(() => {
-          logger.info('Master process exiting');
-          process.exit(0);
-        }, 1000);
-      }, 5000);
+      this.shutdown();
     };
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
     process.on('SIGUSR2', () => shutdown('SIGUSR2')); // For nodemon
+  }
+
+  shutdown() {
+    logger.info('Shutting down cluster...');
+    
+    // Disconnect all workers
+    Object.values(this.workers).forEach(({ worker }) => {
+      try {
+        worker.disconnect();
+      } catch (error) {
+        logger.warn(`Error disconnecting worker ${worker.process.pid}:`, error.message);
+      }
+    });
+
+    // Give workers time to finish current requests
+    setTimeout(() => {
+      Object.values(this.workers).forEach(({ worker }) => {
+        if (!worker.isDead()) {
+          logger.warn(`Killing worker ${worker.process.pid}`);
+          try {
+            worker.kill();
+          } catch (error) {
+            logger.warn(`Error killing worker ${worker.process.pid}:`, error.message);
+          }
+        }
+      });
+      
+      setTimeout(() => {
+        logger.info('Master process exiting');
+        process.exit(0);
+      }, 1000);
+    }, 5000);
   }
 
   setupIPCHandlers() {
