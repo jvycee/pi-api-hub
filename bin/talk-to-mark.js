@@ -175,7 +175,7 @@ Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h
         taskType: 'api_assistance',
         forceClaude: false // Let it use Ollama for cost efficiency
       }, {
-        timeout: 30000,
+        timeout: 60000,
         headers: {
           'Content-Type': 'application/json'
         }
@@ -205,6 +205,9 @@ Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h
       } else if (error.code === 'ECONNREFUSED') {
         console.log(chalk.red(`   Connection refused. Is your Pi API Hub running at ${this.piApiUrl}?`));
         console.log(chalk.yellow('   Try: NODE_ENV=production node cluster.js'));
+      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        console.log(chalk.red(`   Request timeout. The AI service is taking longer than expected.`));
+        console.log(chalk.yellow('   Try asking a simpler question or check if Ollama is responding slowly.'));
       } else {
         console.log(chalk.red(`   Error: ${error.message}`));
       }
