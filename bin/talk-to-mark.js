@@ -56,14 +56,13 @@ class MarkChat {
 
     // Test AI connectivity with simple message
     try {
-      const testResponse = await axios.post(`${this.piApiUrl}/api/anthropic/messages`, {
+      const testResponse = await axios.post(`http://localhost:11434/api/generate`, {
         model: 'llama3.2:latest',
-        max_tokens: 50,
-        system: 'You are a test assistant. Respond with exactly "TEST_SUCCESS" and nothing else.',
-        messages: [{ role: 'user', content: 'test' }]
+        prompt: 'Hello',
+        stream: false
       }, { timeout: 10000 });
       
-      if (testResponse.data && testResponse.data.data) {
+      if (testResponse.data && testResponse.data.response) {
         diagnostics.aiConnectivity = true;
         console.log(chalk.green('✅ AI Connectivity: Working'));
       } else {
@@ -201,10 +200,7 @@ class MarkChat {
       // Build context-aware message for Mark
       const contextualPrompt = this.buildContextualPrompt(userMessage);
       
-      const response = await axios.post(`${this.piApiUrl}/api/anthropic/messages`, {
-        model: 'llama3.2:latest',
-        max_tokens: 2000,
-        system: `You are Mark, an expert AI assistant specializing in API testing, webhooks, and the Pi API Hub infrastructure. 
+      const systemPrompt = `You are Mark, an expert AI assistant specializing in API testing, webhooks, and the Pi API Hub infrastructure. 
 
 Your personality: ${this.markPersonality.personality}
 
@@ -226,13 +222,19 @@ Instructions:
 - Use emojis sparingly but appropriately (🐐 for yourself, 🍌 for Pi infrastructure)
 - Be concise but thorough in explanations
 
-Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h.role}: ${h.content}`).join('\n')}`,
-        messages: [
-          {
-            role: 'user',
-            content: contextualPrompt
-          }
-        ]
+Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h.role}: ${h.content}`).join('\n')}
+
+User: ${contextualPrompt}
+Mark:`;
+
+      const response = await axios.post(`http://localhost:11434/api/generate`, {
+        model: 'llama3.2:latest',
+        prompt: systemPrompt,
+        stream: false,
+        options: {
+          temperature: 0.7,
+          max_tokens: 2000
+        }
       }, {
         timeout: 60000,
         headers: {
@@ -240,8 +242,8 @@ Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h
         }
       });
 
-      const markResponse = response.data.data.content[0].text;
-      const provider = response.data.metadata.provider;
+      const markResponse = response.data.response;
+      const provider = 'ollama';
       
       // Add to conversation history
       this.conversationHistory.push(
