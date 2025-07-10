@@ -6,6 +6,9 @@ const streamTracker = require('./shared/stream-tracker');
 const ResponseHelper = require('./shared/response-helper');
 const MonitoringFactory = require('./shared/monitoring-factory');
 const AuthHandler = require('./middleware/auth-handler');
+const AIFallbackHandler = require('./middleware/ai-fallback-handler');
+const MemoryMonitor = require('./middleware/memory-monitor');
+const WebhookHandler = require('./middleware/webhook-handler');
 const CoreStack = require('./middleware/core-stack');
 const SimpleTenantManager = require('./middleware/simple-tenant');
 const SimpleAuth = require('./middleware/simple-auth');
@@ -18,6 +21,7 @@ const LogRotator = require('./monitoring/log-rotator');
 const PerformanceCollector = require('./monitoring/performance-collector');
 const PredictiveHealthMonitor = require('./monitoring/predictive-health-monitor');
 const AutoRestartManager = require('./monitoring/auto-restart');
+const AnalyticsMiddleware = require('./middleware/analytics-middleware');
 const AnalyticsDashboard = require('./analytics/analytics-dashboard');
 const AdvancedAnalyticsEngine = require('./analytics/advanced-analytics-engine');
 const EnhancedAnalyticsDashboard = require('./analytics/enhanced-analytics-dashboard');
@@ -32,6 +36,9 @@ try {
 
 const app = express();
 const authHandler = new AuthHandler();
+const aiHandler = new AIFallbackHandler();
+const memoryMonitor = new MemoryMonitor();
+const webhookHandler = new WebhookHandler();
 const jsonOptimizer = new JSONOptimizer();
 
 // Initialize optimized middleware stacks
