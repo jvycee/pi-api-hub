@@ -14,9 +14,9 @@ class ClusterManager {
     this.lastRestartTime = 0;
     
     // Dynamic scaling configuration - Pi 5 optimized
-    this.minWorkers = Math.max(2, Math.floor(this.numCPUs * 0.5)); // 50% of CPUs minimum (2 workers)
-    this.maxWorkers = this.numCPUs; // All CPUs maximum
-    this.targetWorkers = this.numCPUs; // Current target
+    this.minWorkers = Math.max(1, Math.floor(this.numCPUs * 0.25)); // 25% of CPUs minimum
+    this.maxWorkers = Math.min(this.numCPUs, 6); // Cap at 6 workers max
+    this.targetWorkers = Math.floor(this.numCPUs * 0.75); // Start with 75% capacity
     this.scalingEnabled = true;
     
     // Load monitoring - Pi 5 optimized thresholds
@@ -38,8 +38,8 @@ class ClusterManager {
     if (cluster.isMaster) {
       logger.info(`Master process ${process.pid} starting with ${this.numCPUs} workers`);
       
-      // Fork workers for each CPU core
-      for (let i = 0; i < this.numCPUs; i++) {
+      // Fork optimized number of workers
+      for (let i = 0; i < this.targetWorkers; i++) {
         this.forkWorker();
       }
 

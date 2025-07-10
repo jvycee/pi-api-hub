@@ -33,51 +33,11 @@ try {
 
 const app = express();
 const authHandler = new AuthHandler();
-const memoryMonitor = new MemoryMonitor(config.performance.memoryThresholds);
-const requestQueue = new RequestQueue();
 const jsonOptimizer = new JSONOptimizer();
-const streamingHandler = new StreamingHandler({ jsonOptimizer });
-const compressionMiddleware = new CompressionMiddleware();
-const intelligentCache = new IntelligentCache({
-  maxSize: 25000, // Pi 5 can handle 5x more entries!
-  defaultTTL: 300000, // 5 minutes
-  maxMemoryMB: 200, // 4x more memory for Pi 5!
-  analytics: true
-});
-const requestBatcher = new RequestDeduplicationBatcher({
-  batchSize: 5,
-  batchTimeout: 150, // 150ms
-  maxBatchWait: 2000, // 2 seconds
-  deduplicationTTL: 10000, // 10 seconds
-  enableBatching: true,
-  enableDeduplication: true
-});
-const webhookHandler = new WebhookHandler({
-  clientSecret: config.apis?.hubspot?.clientSecret,
-  validateSignature: true,
-  enableLogging: true,
-  enableAnalytics: true,
-  maxBodySize: 1024 * 1024 // 1MB
-});
-const aiHandler = new AIFallbackHandler({
-  anthropicApiKey: config.apis?.anthropic?.apiKey,
-  ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'http://10.0.0.218:11434',
-  defaultModel: 'llama3.2:latest',
-  primaryProvider: 'ollama', // Ollama first, Claude for specialized tasks
-  enableFallback: true
-});
-// Security middleware instances
-const adminAuth = config.security?.adminApiKey ? new AdminAuthMiddleware({
-  sessionTimeout: 30 * 60 * 1000, // 30 minutes
-  maxAttempts: 5,
-  lockoutTime: 15 * 60 * 1000 // 15 minutes
-}) : null;
-const securityHeaders = new SecurityHeadersMiddleware();
-const inputValidation = new InputValidationMiddleware({
-  maxBodySize: 10 * 1024 * 1024, // 10MB
-  maxQueryParams: 50,
-  sanitizeStrings: true
-});
+
+// Initialize optimized middleware stacks
+const securityStack = new SecurityStack();
+const coreStack = new CoreStack(config, jsonOptimizer);
 const paginationHelper = new PaginationHelper();
 const cursorPagination = new CursorPagination();
 const logRotator = new LogRotator();
