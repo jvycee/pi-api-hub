@@ -660,22 +660,27 @@
                         }
                     }
                     
-                    // Fallback: If Ollama endpoint doesn't exist, assume Mark is available if Pi API Hub is healthy
+                    // Fallback: If Ollama endpoint doesn't exist, check if Pi API Hub itself is healthy
                     // (since you confirmed Mark works from the Pi)
-                    const systemStatus = document.getElementById('system-status').textContent;
-                    if (systemStatus.includes('OPERATIONAL')) {
-                        document.getElementById('ollama-health').textContent = '🟢 ASSUMED HEALTHY';
-                        document.getElementById('mark-status').textContent = '🐐 READY TO CHAT';
-                        document.getElementById('active-model').textContent = 'llama3.2:latest';
-                        
-                        this.updateOllamaChart({ 
-                            healthy: true, 
-                            modelCount: 1, 
-                            activeModel: 'llama3.2:latest',
-                            fallback: true
-                        });
+                    const healthResponse = await fetch('/health');
+                    if (healthResponse.ok) {
+                        const healthData = await healthResponse.json();
+                        if (healthData.status === 'healthy') {
+                            document.getElementById('ollama-health').textContent = '🟢 ASSUMED HEALTHY';
+                            document.getElementById('mark-status').textContent = '🐐 READY TO CHAT';
+                            document.getElementById('active-model').textContent = 'llama3.2:latest';
+                            
+                            this.updateOllamaChart({ 
+                                healthy: true, 
+                                modelCount: 1, 
+                                activeModel: 'llama3.2:latest',
+                                fallback: true
+                            });
+                        } else {
+                            throw new Error('Pi API Hub not healthy');
+                        }
                     } else {
-                        throw new Error('Pi API Hub not operational');
+                        throw new Error('Pi API Hub not responding');
                     }
                     
                 } catch (error) {
