@@ -55,7 +55,7 @@ class ConfigManager {
             }).default(),
 
             hubspot: Joi.object({
-                privateAppToken: Joi.string().required(),
+                privateAppToken: Joi.string().allow('').default(''),
                 baseUrl: Joi.string().default('https://api.hubapi.com'),
                 timeout: Joi.number().default(30000),
                 retries: Joi.number().default(3),
@@ -63,7 +63,7 @@ class ConfigManager {
                     daily: Joi.number().default(40000),
                     burst: Joi.number().default(100)
                 }).default()
-            }).required(),
+            }).default(),
 
             anthropic: Joi.object({
                 apiKey: Joi.string(),
@@ -328,6 +328,13 @@ class ConfigManager {
         }
 
         if (missing.length > 0) {
+            // In production, warn but don't fail if HubSpot integration isn't needed
+            if (this.getEnvironment() === 'production') {
+                logger.warn(`⚠️  Missing environment variables (HubSpot features will be disabled): ${missing.join(', ')}`);
+                logger.warn('💡 To enable HubSpot integration, set: HUBSPOT_PRIVATE_APP_TOKEN and BANANA_ADMIN_KEY');
+                return; // Don't throw error in production
+            }
+            
             throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
         }
     }

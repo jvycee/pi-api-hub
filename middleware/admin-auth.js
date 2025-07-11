@@ -12,8 +12,13 @@ class AdminAuthMiddleware {
     this.lockoutTime = options.lockoutTime || 15 * 60 * 1000; // 15 minutes
     
     if (!this.adminApiKey) {
-      logger.error('ADMIN_API_KEY environment variable is required for admin authentication');
-      throw new Error('Admin API key not configured');
+      if (process.env.NODE_ENV === 'production') {
+        logger.warn('⚠️  ADMIN_API_KEY not configured - admin features will be disabled');
+        this.adminDisabled = true;
+      } else {
+        logger.error('ADMIN_API_KEY environment variable is required for admin authentication');
+        throw new Error('Admin API key not configured');
+      }
     }
   }
 
@@ -56,6 +61,15 @@ class AdminAuthMiddleware {
 
   // Authenticate admin request
   async authenticate(req, res, next) {
+    // If admin is disabled, deny all admin requests
+    if (this.adminDisabled) {
+      return res.status(503).json({
+        success: false,
+        error: 'Admin features are disabled - ADMIN_API_KEY not configured',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     const ip = req.ip || req.connection.remoteAddress;
     
     // Check rate limiting first
