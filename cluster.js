@@ -1,10 +1,11 @@
 const cluster = require('cluster');
 const os = require('os');
-const config = require('./shared/config');
+const { getConfigManager } = require('./shared/config-manager');
 const logger = require('./shared/logger');
 
 class ClusterManager {
   constructor() {
+    this.config = getConfigManager();
     this.numCPUs = os.cpus().length;
     this.workers = {};
     this.workerStats = {};
@@ -13,24 +14,25 @@ class ClusterManager {
     this.restartWindow = 60000; // 1 minute
     this.lastRestartTime = 0;
     
-    // Dynamic scaling configuration - Pi 5 optimized
-    this.minWorkers = Math.max(1, Math.floor(this.numCPUs * 0.25)); // 25% of CPUs minimum
-    this.maxWorkers = Math.min(this.numCPUs, 6); // Cap at 6 workers max
-    this.targetWorkers = Math.floor(this.numCPUs * 0.75); // Start with 75% capacity
-    this.scalingEnabled = true;
+    // Dynamic scaling configuration from centralized config
+    const clusterConfig = this.config.getClusterConfig();
+    this.minWorkers = clusterConfig.workers.min;
+    this.maxWorkers = clusterConfig.workers.max;
+    this.targetWorkers = clusterConfig.workers.target || Math.floor(this.numCPUs * 0.75);
+    this.scalingEnabled = clusterConfig.enabled && clusterConfig.workers.scaling.enabled;
     
     // Load monitoring - Pi 5 optimized thresholds
     this.loadHistory = [];
     this.maxLoadHistorySize = 20; // Keep last 20 readings
     this.loadThresholds = {
-      scaleUp: 0.75,   // 75% load triggers scale up - more responsive
-      scaleDown: 0.35, // 35% load triggers scale down - more stable
+      scaleUp: clusterConfig.workers.scaling.scaleUpThreshold,
+      scaleDown: clusterConfig.workers.scaling.scaleDownThreshold,
       critical: 0.95   // 95% load is critical
     };
     
     // Scaling cooldown to prevent thrashing
     this.lastScalingAction = 0;
-    this.scalingCooldown = 60000; // 1 minute cooldown
+    this.scalingCooldown = clusterConfig.workers.scaling.cooldown;
     this.scalingHistory = [];
   }
 

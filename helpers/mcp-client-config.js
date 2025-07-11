@@ -47,6 +47,167 @@ class MCPClientConfig {
     }
 
     /**
+     * Resolve path with home directory expansion
+     */
+    resolvePath(filePath) {
+        if (filePath.startsWith('~/')) {
+            return path.join(os.homedir(), filePath.slice(2));
+        }
+        return path.resolve(filePath);
+    }
+
+    /**
+     * Get status for all configured clients
+     */
+    async getStatus() {
+        const status = {};
+        
+        for (const [clientName, clientConfig] of Object.entries(this.configs)) {
+            if (clientConfig.enabled) {
+                try {
+                    const configPath = this.resolvePath(clientConfig.config_path);
+                    const configStatus = await this.checkExistingConfig(configPath);
+                    
+                    status[clientName] = {
+                        enabled: clientConfig.enabled,
+                        configPath: configPath,
+                        configured: configStatus.configured,
+                        hasHubspotBanana: configStatus.hasHubspotBanana,
+                        valid: configStatus.valid,
+                        issues: configStatus.issues
+                    };
+                } catch (error) {
+                    status[clientName] = {
+                        enabled: clientConfig.enabled,
+                        configured: false,
+                        hasHubspotBanana: false,
+                        valid: false,
+                        error: error.message
+                    };
+                }
+            }
+        }
+        
+        return status;
+    }
+
+    /**
+     * Check if configuration file exists and is valid
+     */
+    async checkExistingConfig(configPath) {
+        const result = {
+            configured: false,
+            hasHubspotBanana: false,
+            valid: false,
+            issues: []
+        };
+
+        try {
+            await fs.access(configPath);
+            const configContent = await fs.readFile(configPath, 'utf8');
+            const config = JSON.parse(configContent);
+
+            result.configured = true;
+
+            // Check for HubSpot Banana MCP server
+            if (config.mcpServers && config.mcpServers['hubspot-banana-hybrid']) {
+                result.hasHubspotBanana = true;
+                
+                // Validate configuration
+                const mcpServerConfig = config.mcpServers['hubspot-banana-hybrid'];
+                if (mcpServerConfig.command && mcpServerConfig.args) {
+                    result.valid = true;
+                } else {
+                    result.issues.push('Missing command or args in MCP server configuration');
+                }
+
+                // Check environment variables
+                if (mcpServerConfig.env) {
+                    const requiredEnvVars = ['PRIVATE_APP_ACCESS_TOKEN', 'BANANA_API_KEY'];
+                    const missingEnvVars = requiredEnvVars.filter(envVar => !mcpServerConfig.env[envVar]);
+                    if (missingEnvVars.length > 0) {
+                        result.issues.push(`Missing environment variables: ${missingEnvVars.join(', ')}`);
+                    }
+                } else {
+                    result.issues.push('Missing environment variables configuration');
+                }
+            }
+
+        } catch (error) {
+            if (error.code !== 'ENOENT') {
+                result.issues.push(`Error reading config: ${error.message}`);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Generate setup instructions for all clients
+     */
+    generateSetupInstructions() {
+        return {
+            claude_desktop: {
+                name: 'Claude Desktop',
+                steps: [
+                    'Install Claude Desktop from https://claude.ai/download',
+                    'Set environment variables: HUBSPOT_PRIVATE_APP_TOKEN and BANANA_API_KEY',
+                    'Run: npm run mcp:setup-claude',
+                    'Restart Claude Desktop',
+                    'Test MCP tools in a new conversation'
+                ],
+                configPath: this.configs.claude_desktop?.config_path,
+                notes: [
+                    'Requires Claude Desktop v1.0.0 or higher',
+                    'Configuration is stored in Application Support folder'
+                ]
+            },
+            cursor: {
+                name: 'Cursor',
+                steps: [
+                    'Install Cursor from https://cursor.sh',
+                    'Set environment variables: HUBSPOT_PRIVATE_APP_TOKEN and BANANA_API_KEY',
+                    'Run: npm run mcp:setup-cursor',
+                    'Restart Cursor',
+                    'Test MCP tools in the AI assistant'
+                ],
+                configPath: this.configs.cursor?.config_path,
+                notes: [
+                    'Requires Cursor with MCP support',
+                    'Configuration is stored in user home directory'
+                ]
+            },
+            environment: {
+                name: 'Environment Setup',
+                template: this.generateEnvTemplate(),
+                steps: [
+                    'Get HubSpot Private App Token from HubSpot Developer Portal',
+                    'Get Banana Admin API Key from /setup/admin-key endpoint',
+                    'Create .env file with required variables',
+                    'Run setup commands for desired clients'
+                ]
+            }
+        };
+    }
+
+    /**
+     * Generate environment template
+     */
+    generateEnvTemplate() {
+        return `# HubSpot Private App Token
+# Get this from HubSpot Developer Portal > Private Apps
+HUBSPOT_PRIVATE_APP_TOKEN=your_hubspot_token_here
+
+# Banana Admin API Key
+# Get this from Pi API Hub /setup/admin-key endpoint
+BANANA_ADMIN_KEY=your_admin_api_key_here
+
+# Optional: MCP Server Configuration
+MCP_MODE=hybrid
+BANANA_SERVER_PORT=3000`;
+    }
+
+    /**
      * Generate configuration for a specific client
      */
     async generateConfig(clientName, clientConfig) {

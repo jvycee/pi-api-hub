@@ -10,7 +10,8 @@ const {
 } = require('@modelcontextprotocol/sdk/types.js');
 const axios = require('axios');
 const logger = require('../shared/logger');
-const config = require('../shared/config');
+const { getConfigManager } = require('../shared/config-manager');
+const { getErrorHandler } = require('../shared/error-handler');
 const mcpConfig = require('../config/mcp-config.json');
 
 /**
@@ -22,11 +23,16 @@ const mcpConfig = require('../config/mcp-config.json');
  */
 class HybridMCPServer {
     constructor() {
+        this.config = getConfigManager();
+        this.errorHandler = getErrorHandler();
+        
+        const mcpServerConfig = this.config.getMCPConfig().server;
+        
         this.server = new Server(
             {
-                name: 'hubspot-banana-hybrid',
-                version: '1.0.0',
-                description: 'Hybrid MCP server combining official HubSpot tools with banana-powered optimizations'
+                name: mcpServerConfig.name,
+                version: mcpServerConfig.version,
+                description: mcpServerConfig.description
             },
             {
                 capabilities: {
@@ -36,8 +42,9 @@ class HybridMCPServer {
             }
         );
 
-        this.apiBaseUrl = `http://localhost:${process.env.BANANA_SERVER_PORT || config.server.port}`;
-        this.mode = process.env.MCP_MODE || 'hybrid';
+        const serverConfig = this.config.getServerConfig();
+        this.apiBaseUrl = `http://localhost:${serverConfig.port}`;
+        this.mode = this.config.getMCPConfig().mode;
         this.officialTools = [];
         this.bananaTools = [];
         

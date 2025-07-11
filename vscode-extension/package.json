@@ -1,0 +1,182 @@
+{
+  "name": "hubspot-banana-mcp",
+  "displayName": "HubSpot Banana MCP",
+  "description": "🍌 Banana-powered HubSpot MCP integration for VS Code",
+  "version": "1.0.0",
+  "publisher": "banana-labs",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Data Science"
+  ],
+  "keywords": [
+    "hubspot",
+    "mcp",
+    "banana",
+    "crm",
+    "model-context-protocol"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "hubspot-banana-mcp.setupMCP",
+        "title": "Setup HubSpot Banana MCP",
+        "category": "HubSpot MCP"
+      },
+      {
+        "command": "hubspot-banana-mcp.checkStatus",
+        "title": "Check MCP Status",
+        "category": "HubSpot MCP"
+      },
+      {
+        "command": "hubspot-banana-mcp.testConnection",
+        "title": "Test MCP Connection",
+        "category": "HubSpot MCP"
+      },
+      {
+        "command": "hubspot-banana-mcp.openDashboard",
+        "title": "Open Monitoring Dashboard",
+        "category": "HubSpot MCP"
+      },
+      {
+        "command": "hubspot-banana-mcp.refreshContacts",
+        "title": "Refresh HubSpot Contacts",
+        "category": "HubSpot MCP"
+      }
+    ],
+    "configuration": {
+      "title": "HubSpot Banana MCP",
+      "properties": {
+        "hubspot-banana-mcp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable HubSpot Banana MCP integration"
+        },
+        "hubspot-banana-mcp.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "Pi API Hub server URL"
+        },
+        "hubspot-banana-mcp.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start MCP server when VS Code starts"
+        },
+        "hubspot-banana-mcp.debugMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug logging for MCP operations"
+        },
+        "hubspot-banana-mcp.cacheTTL": {
+          "type": "number",
+          "default": 300000,
+          "description": "Cache TTL in milliseconds (default: 5 minutes)"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hubspot-banana-mcp",
+          "title": "HubSpot MCP",
+          "icon": "$(database)"
+        }
+      ]
+    },
+    "views": {
+      "hubspot-banana-mcp": [
+        {
+          "id": "hubspot-mcp-status",
+          "name": "MCP Status",
+          "when": "hubspot-banana-mcp.enabled"
+        },
+        {
+          "id": "hubspot-contacts",
+          "name": "Recent Contacts",
+          "when": "hubspot-banana-mcp.enabled"
+        },
+        {
+          "id": "hubspot-analytics",
+          "name": "Usage Analytics",
+          "when": "hubspot-banana-mcp.enabled"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "hubspot-banana-mcp.refreshContacts",
+          "when": "view == hubspot-contacts",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "hubspot-banana-mcp.setupMCP",
+          "when": "true"
+        },
+        {
+          "command": "hubspot-banana-mcp.checkStatus",
+          "when": "true"
+        },
+        {
+          "command": "hubspot-banana-mcp.testConnection",
+          "when": "true"
+        }
+      ]
+    },
+    "snippets": [
+      {
+        "language": "javascript",
+        "path": "./snippets/hubspot-mcp.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/hubspot-mcp.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.4.0",
+    "axios": "^1.6.2",
+    "ws": "^8.14.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/pi-api-hub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/pi-api-hub/issues"
+  },
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#FFD700",
+    "theme": "light"
+  }
+}

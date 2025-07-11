@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const config = require('./shared/config');
+const { getConfigManager } = require('./shared/config-manager');
+const { getErrorHandler } = require('./shared/error-handler');
 const logger = require('./shared/logger');
 const streamTracker = require('./shared/stream-tracker');
 const ResponseHelper = require('./shared/response-helper');
@@ -21,9 +22,13 @@ const DependencyScanner = require('./security/dependency-scanner');
 const InputValidationSchemas = require('./middleware/input-validation-schemas');
 const cleanupHandler = require('./middleware/cleanup-handler');
 
+// Initialize configuration and error handling
+const config = getConfigManager();
+const errorHandler = getErrorHandler();
+
 // Validate configuration
 try {
-  config.validateConfig();
+  config.validateConfiguration();
 } catch (error) {
   logger.error('Configuration validation failed:', error.message);
   process.exit(1);
@@ -88,9 +93,9 @@ app.use(csrfProtection.tokenMiddleware());
 app.use(csrfProtection.originValidation());
 app.use(csrfProtection.validateMiddleware());
 
-// CORS with secure origins
+// CORS with secure origins from centralized config
 app.use(cors({
-  origin: config.security?.corsOrigins || config.server?.corsOrigins,
+  origin: config.getSecurityConfig().corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key', 'x-api-key', 'x-csrf-token', 'csrf-token']
@@ -144,7 +149,7 @@ app.get('/health', (req, res) => {
     
     basicHealth.detailed = {
       uptime: Math.floor(process.uptime() / 60) + ' minutes', // Rounded for privacy
-      environment: config.server.env,
+      environment: config.getEnvironment(),
       worker: {
         clustered: !!process.env.NODE_CLUSTER_WORKER
       },
@@ -155,7 +160,9 @@ app.get('/health', (req, res) => {
         requestQueue: {
           status: queueStatus.health === 'healthy' ? 'normal' : 'degraded'
         }
-      }
+      },
+      configuration: config.healthCheck(),
+      errors: errorHandler.healthCheck()
     };
   }
   
@@ -280,15 +287,8 @@ app.get('/setup/admin-key', (req, res) => {
 
 // Ollama status endpoint now handled by /routes/monitoring.js
 
-// Error handling middleware
-app.use((error, req, res, next) => {
-  logger.error('Unhandled error:', error);
-  res.status(500).json({
-    success: false,
-    error: 'Internal server error',
-    timestamp: new Date().toISOString()
-  });
-});
+// Centralized error handling middleware
+app.use(errorHandler.middleware());
 
 // 404 handler
 app.use((req, res) => {
@@ -302,10 +302,11 @@ app.use((req, res) => {
 
 // Start server only if not being imported by tests or running as cluster worker
 if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
-  const server = app.listen(config.server.port, '0.0.0.0', () => {
+  const serverConfig = config.getServerConfig();
+  const server = app.listen(serverConfig.port, serverConfig.host, () => {
     logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌 (GitHub Actions Test)`);
-    logger.info(`Port: ${config.server.port}`);
-    logger.info(`Environment: ${config.server.env}`);
+    logger.info(`Port: ${serverConfig.port}`);
+    logger.info(`Environment: ${serverConfig.env}`);
     logger.info(`Mode: ${process.env.NODE_CLUSTER_WORKER ? '4-Core Beast Mode' : 'Single Core'}`);
     logger.info('🚀 MAXIMUM BANANA ENDPOINTS:');
     logger.info('  🏥 GET  /health - Health check');
@@ -325,7 +326,7 @@ if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
     logger.info('🍌 BANANA POWER LEVEL: MAXIMUM! 🍌');
     
     // Log webhook URL for easy setup
-    const webhookUrl = `http://localhost:${config.server.port}/webhooks/hubspot`;
+    const webhookUrl = `http://localhost:${serverConfig.port}/webhooks/hubspot`;
     logger.info('🍌 WEBHOOK URL FOR HUBSPOT:', webhookUrl);
     
     // Log AI routing status

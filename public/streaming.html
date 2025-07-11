@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍌 Banana Streaming Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .connection-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .connection-indicator.connected { background: #4CAF50; }
+        .connection-indicator.connecting { background: #FF9800; animation: pulse 1.5s infinite; }
+        .connection-indicator.disconnected { background: #F44336; }
+        .connection-indicator.error { background: #E91E63; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .btn {
+            background: #FFD700;
+            color: #333;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+        }
+
+        .btn:hover {
+            background: #FFC107;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 215, 0, 0.4);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn.secondary {
+            background: #6c757d;
+            color: white;
+            box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+        }
+
+        .btn.secondary:hover {
+            background: #5a6268;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #FFD700;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .subscription-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        select, input {
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #FFD700;
+        }
+
+        .contacts-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .contact-item {
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: #f9f9f9;
+        }
+
+        .contact-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .contact-email {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .contact-company {
+            color: #888;
+            font-size: 0.8rem;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .value {
+            color: #666;
+        }
+
+        .value.connected {
+            color: #4CAF50;
+        }
+
+        .value.disconnected {
+            color: #F44336;
+        }
+
+        .tool-calls-log {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .tool-call-entry {
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: #f9f9f9;
+        }
+
+        .tool-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .tool-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .tool-time {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .tool-result {
+            font-size: 0.9rem;
+        }
+
+        .tool-result.success {
+            color: #4CAF50;
+        }
+
+        .tool-result.error {
+            color: #F44336;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 15px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+            max-width: 300px;
+        }
+
+        .notification.success { background: #4CAF50; }
+        .notification.error { background: #F44336; }
+        .notification.warning { background: #FF9800; }
+        .notification.info { background: #2196F3; }
+
+        .subscriptions-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .subscriptions-list li {
+            padding: 5px 10px;
+            background: #f0f0f0;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #888;
+            padding: 40px 20px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #FFD700;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .auto-refresh-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .subscription-controls {
+                flex-direction: column;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🍌 Banana Streaming Dashboard</h1>
+            <p>Real-time MCP and HubSpot data streaming</p>
+            
+            <div class="connection-status">
+                <div id="connection-indicator" class="connection-indicator disconnected"></div>
+                <span id="connection-status">Disconnected</span>
+            </div>
+            
+            <div class="controls">
+                <button id="connect-btn" class="btn" onclick="connectStreaming()">Connect</button>
+                <button id="disconnect-btn" class="btn secondary" onclick="disconnectStreaming()" disabled>Disconnect</button>
+                <button class="btn" data-requires-connection data-action="request-data" data-data-type="mcp_status" disabled>
+                    Refresh Status
+                </button>
+                <button class="btn" data-requires-connection data-action="request-data" data-data-type="analytics" disabled>
+                    Get Analytics
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-connections">0</div>
+                <div class="stat-label">Total Connections</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="active-streams">0</div>
+                <div class="stat-label">Active Streams</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="messages-per-sec">0</div>
+                <div class="stat-label">Messages/sec</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="latency">0ms</div>
+                <div class="stat-label">Latency</div>
+            </div>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- MCP Status -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <div class="card-title">🔌 MCP Status</div>
+                    <button class="btn" data-requires-connection data-action="request-data" data-data-type="mcp_status" disabled>
+                        Refresh
+                    </button>
+                </div>
+                <div id="mcp-status">
+                    <div class="empty-state">Not connected</div>
+                </div>
+            </div>
+
+            <!-- Subscription Controls -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <div class="card-title">📡 Subscriptions</div>
+                </div>
+                
+                <div class="subscription-controls">
+                    <select id="channel-select" data-requires-connection disabled>
+                        <option value="">Select Channel</option>
+                        <option value="hubspot_contacts">HubSpot Contacts</option>
+                        <option value="mcp_status">MCP Status</option>
+                        <option value="performance_metrics">Performance Metrics</option>
+                        <option value="tool_calls">Tool Calls</option>
+                    </select>
+                    <input type="text" id="filters-input" placeholder='Filters (JSON)' data-requires-connection disabled>
+                    <button id="subscribe-btn" class="btn" data-requires-connection disabled>Subscribe</button>
+                </div>
+                
+                <div class="auto-refresh-control">
+                    <input type="checkbox" id="auto-refresh" data-requires-connection disabled>
+                    <label for="auto-refresh">Auto-refresh metrics</label>
+                </div>
+                
+                <h4>Active Subscriptions:</h4>
+                <ul id="subscriptions-list" class="subscriptions-list">
+                    <li class="empty-state">No active subscriptions</li>
+                </ul>
+            </div>
+
+            <!-- HubSpot Contacts -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <div class="card-title">👥 HubSpot Contacts</div>
+                    <div>
+                        <button class="btn" data-requires-connection data-action="request-data" data-data-type="hubspot_contacts" disabled>
+                            Refresh
+                        </button>
+                        <button class="btn" data-requires-connection onclick="window.streamingDashboard?.client?.subscribe('hubspot_contacts')" disabled>
+                            Subscribe
+                        </button>
+                    </div>
+                </div>
+                <div id="contacts-list" class="contacts-list">
+                    <div class="empty-state">No contacts loaded</div>
+                </div>
+            </div>
+
+            <!-- Tool Calls Log -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <div class="card-title">🛠️ Tool Calls</div>
+                    <div>
+                        <button class="btn" data-requires-connection data-action="call-tool" data-tool="banana-get-contacts-cached" disabled>
+                            Test Tool
+                        </button>
+                    </div>
+                </div>
+                <div id="tool-calls-log" class="tool-calls-log">
+                    <div class="empty-state">No tool calls yet</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="dashboard-grid">
+            <!-- Performance Chart -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <div class="card-title">📈 Performance Metrics</div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="performance-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Connection Chart -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <div class="card-title">🔗 Connection Usage</div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="connection-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Throughput Chart -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <div class="card-title">💨 Message Throughput</div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="throughput-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Real-time Data Display -->
+            <div class="dashboard-card">
+                <div class="card-header">
+                    <div class="card-title">📊 Live Metrics</div>
+                </div>
+                <div id="metrics-display">
+                    <div class="empty-state">No metrics data</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Include WebSocket client -->
+    <script>
+        // Simple WebSocket client implementation for browser use
+        class BananaStreamingClient extends EventTarget {
+            constructor(url, options = {}) {
+                super();
+                this.url = url;
+                this.options = {
+                    reconnect: options.reconnect !== false,
+                    reconnectInterval: options.reconnectInterval || 5000,
+                    maxReconnectAttempts: options.maxReconnectAttempts || 10,
+                    heartbeatInterval: options.heartbeatInterval || 30000,
+                    timeout: options.timeout || 10000,
+                    ...options
+                };
+
+                this.ws = null;
+                this.isConnected = false;
+                this.reconnectCount = 0;
+                this.subscriptions = new Set();
+                this.pendingRequests = new Map();
+                this.requestIdCounter = 0;
+            }
+
+            async connect() {
+                return new Promise((resolve, reject) => {
+                    try {
+                        this.ws = new WebSocket(this.url);
+                        
+                        this.ws.onopen = () => {
+                            this.isConnected = true;
+                            this.reconnectCount = 0;
+                            this.dispatchEvent(new CustomEvent('connected'));
+                            resolve();
+                        };
+
+                        this.ws.onmessage = (event) => {
+                            try {
+                                const message = JSON.parse(event.data);
+                                this.processMessage(message);
+                            } catch (error) {
+                                console.error('Failed to parse message:', error);
+                            }
+                        };
+
+                        this.ws.onclose = (event) => {
+                            this.isConnected = false;
+                            this.dispatchEvent(new CustomEvent('disconnected', { 
+                                detail: { code: event.code, reason: event.reason }
+                            }));
+                            
+                            if (this.options.reconnect && this.reconnectCount < this.options.maxReconnectAttempts) {
+                                this.attemptReconnect();
+                            }
+                        };
+
+                        this.ws.onerror = (error) => {
+                            this.dispatchEvent(new CustomEvent('error', { detail: error }));
+                            if (!this.isConnected) {
+                                reject(error);
+                            }
+                        };
+
+                        setTimeout(() => {
+                            if (!this.isConnected) {
+                                this.ws.close();
+                                reject(new Error('Connection timeout'));
+                            }
+                        }, this.options.timeout);
+
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }
+
+            processMessage(message) {
+                const { type, requestId } = message;
+
+                // Handle pending requests
+                if (requestId && this.pendingRequests.has(requestId)) {
+                    const { resolve } = this.pendingRequests.get(requestId);
+                    this.pendingRequests.delete(requestId);
+                    resolve(message);
+                    return;
+                }
+
+                // Dispatch specific events
+                this.dispatchEvent(new CustomEvent(type, { detail: message }));
+                
+                // Dispatch channel-specific events
+                if (message.channel) {
+                    this.dispatchEvent(new CustomEvent(`data:${message.channel}`, { detail: message.data }));
+                    this.dispatchEvent(new CustomEvent(`update:${message.channel}`, { detail: message.data }));
+                }
+            }
+
+            async subscribe(channel, filters = {}) {
+                const message = {
+                    type: 'subscribe',
+                    channel: channel,
+                    filters: filters
+                };
+
+                this.send(message);
+                this.subscriptions.add(channel);
+                return Promise.resolve();
+            }
+
+            async requestData(dataType, parameters = {}) {
+                const requestId = this.generateRequestId();
+                const message = {
+                    type: 'request_data',
+                    requestId: requestId,
+                    dataType: dataType,
+                    parameters: parameters
+                };
+
+                return this.sendWithResponse(message, requestId);
+            }
+
+            async callMCPTool(tool, parameters = {}) {
+                const requestId = this.generateRequestId();
+                const message = {
+                    type: 'mcp_tool_call',
+                    requestId: requestId,
+                    tool: tool,
+                    parameters: parameters
+                };
+
+                return this.sendWithResponse(message, requestId);
+            }
+
+            send(message) {
+                if (!this.isConnected || !this.ws) {
+                    throw new Error('Not connected');
+                }
+                this.ws.send(JSON.stringify(message));
+            }
+
+            async sendWithResponse(message, requestId) {
+                return new Promise((resolve, reject) => {
+                    this.pendingRequests.set(requestId, { resolve, reject });
+                    
+                    try {
+                        this.send(message);
+                    } catch (error) {
+                        this.pendingRequests.delete(requestId);
+                        reject(error);
+                    }
+
+                    setTimeout(() => {
+                        if (this.pendingRequests.has(requestId)) {
+                            this.pendingRequests.delete(requestId);
+                            reject(new Error('Request timeout'));
+                        }
+                    }, this.options.timeout);
+                });
+            }
+
+            generateRequestId() {
+                return `req_${++this.requestIdCounter}_${Date.now()}`;
+            }
+
+            disconnect() {
+                this.options.reconnect = false;
+                if (this.ws) {
+                    this.ws.close(1000, 'Client disconnect');
+                }
+                this.isConnected = false;
+                this.subscriptions.clear();
+                this.pendingRequests.clear();
+            }
+
+            attemptReconnect() {
+                this.reconnectCount++;
+                this.dispatchEvent(new CustomEvent('reconnecting', { 
+                    detail: { attempt: this.reconnectCount }
+                }));
+                
+                setTimeout(async () => {
+                    try {
+                        await this.connect();
+                        this.dispatchEvent(new CustomEvent('reconnected'));
+                    } catch (error) {
+                        if (this.reconnectCount >= this.options.maxReconnectAttempts) {
+                            this.dispatchEvent(new CustomEvent('reconnectionFailed'));
+                        } else {
+                            this.attemptReconnect();
+                        }
+                    }
+                }, this.options.reconnectInterval);
+            }
+
+            // Event listener helpers
+            on(event, callback) {
+                this.addEventListener(event, callback);
+            }
+
+            off(event, callback) {
+                this.removeEventListener(event, callback);
+            }
+        }
+    </script>
+    
+    <!-- Include the dashboard client -->
+    <script src="/js/streaming-dashboard.js"></script>
+</body>
+</html>
