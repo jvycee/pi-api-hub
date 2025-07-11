@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "hubspot-banana": {
+      "command": "node",
+      "args": [
+        "./mcp-server/hybrid-server.js"
+      ],
+      "env": {
+        "PRIVATE_APP_ACCESS_TOKEN": "${HUBSPOT_PRIVATE_APP_TOKEN}",
+        "BANANA_API_KEY": "${BANANA_ADMIN_KEY}",
+        "BANANA_SERVER_PORT": "3000",
+        "MCP_MODE": "hybrid"
+      }
+    }
+  }
+}

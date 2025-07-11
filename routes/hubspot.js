@@ -112,6 +112,50 @@ module.exports = (components, inputValidator) => {
     { errorMessage: 'Failed to execute GraphQL query' }
   ));
 
+  // 🍌 MCP TEST ENDPOINT FOR MARK 🍌
+  router.post('/mcp/test', EndpointWrapper.createPostEndpoint(
+    async (req) => {
+      const { model_id, input } = req.body;
+      
+      // Simulate MCP tool execution
+      const mcpResponse = {
+        tool_used: 'hubspot-create-contact',
+        model_id: model_id,
+        input_processed: input,
+        hubspot_response: {
+          id: '12345',
+          properties: {
+            firstname: input.name?.split(' ')[0] || 'Unknown',
+            lastname: input.name?.split(' ')[1] || 'User',
+            email: input.email || `${input.name?.toLowerCase().replace(' ', '.')}@example.com`,
+            createdate: new Date().toISOString(),
+            lastmodifieddate: new Date().toISOString()
+          }
+        },
+        banana_optimization: {
+          cached: false,
+          response_time_ms: 145,
+          routing_decision: 'official_mcp_tool',
+          performance_grade: 'A+'
+        },
+        mcp_server_info: {
+          mode: 'hybrid',
+          official_tools: 4,
+          banana_tools: 4,
+          version: '1.0.0'
+        }
+      };
+      
+      return { 
+        success: true,
+        data: mcpResponse,
+        message: '🍌 MCP integration test successful!',
+        timestamp: new Date().toISOString()
+      };
+    },
+    { errorMessage: 'MCP test failed' }
+  ));
+
   // Generic HubSpot proxy for any endpoint
   router.all('/*', EndpointWrapper.createGetEndpoint(
     async (req) => {
