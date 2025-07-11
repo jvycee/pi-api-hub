@@ -1,6 +1,6 @@
 const axios = require('axios');
 const logger = require('../shared/logger');
-const { getErrorHandler } = require('../shared/error-handler');
+const OllamaBaseService = require('../shared/ollama-base-service');
 
 /**
  * 🐐 MARK SERVICE - AI-Powered CLI Assistant 🐐
@@ -8,19 +8,10 @@ const { getErrorHandler } = require('../shared/error-handler');
  * Dedicated service for Mark's AI assistant functionality
  * Handles conversation processing, health monitoring, and AI backend integration
  */
-class MarkService {
+class MarkService extends OllamaBaseService {
   constructor(options = {}) {
-    this.ollamaUrl = options.ollamaUrl || process.env.OLLAMA_URL || 'http://10.0.0.120:11434';
+    super(options);
     this.piApiUrl = options.piApiUrl || process.env.PI_API_URL || 'http://localhost:3000';
-    this.defaultModel = options.defaultModel || 'llama3.2:latest';
-    this.timeout = options.timeout || 30000;
-    
-    // Mark's conversation state
-    this.conversationHistory = [];
-    this.maxHistoryLength = 20;
-    this.isAvailable = false;
-    this.lastHealthCheck = null;
-    this.healthCheckInterval = 60000; // 1 minute
     
     // Mark's capabilities and personality
     this.specialties = [
@@ -39,8 +30,6 @@ class MarkService {
       tone: "friendly and helpful",
       expertise: "Pi API Hub infrastructure and testing"
     };
-    
-    this.errorHandler = getErrorHandler();
     
     logger.info('🐐 Mark Service initialized', {
       ollamaUrl: this.ollamaUrl,
@@ -94,42 +83,6 @@ class MarkService {
     }
   }
 
-  /**
-   * Check Ollama service health
-   */
-  async checkOllamaHealth() {
-    try {
-      const response = await axios.get(`${this.ollamaUrl}/api/tags`, {
-        timeout: this.timeout
-      });
-      
-      const models = response.data.models || [];
-      const hasDefaultModel = models.some(model => model.name === this.defaultModel);
-      
-      return {
-        healthy: true,
-        modelCount: models.length,
-        models: models.map(m => ({ name: m.name, size: m.size })),
-        defaultModelAvailable: hasDefaultModel,
-        activeModel: hasDefaultModel ? this.defaultModel : models[0]?.name || 'none'
-      };
-      
-    } catch (error) {
-      logger.warn('🐐 Ollama health check failed', {
-        url: this.ollamaUrl,
-        error: error.message
-      });
-      
-      return {
-        healthy: false,
-        error: error.message,
-        modelCount: 0,
-        models: [],
-        defaultModelAvailable: false,
-        activeModel: 'unavailable'
-      };
-    }
-  }
 
   /**
    * Check Pi API Hub connectivity
@@ -203,7 +156,7 @@ class MarkService {
       const conversationContext = this.buildConversationContext(message);
       
       // Send to Ollama
-      const response = await this.sendToOllama(systemPrompt, conversationContext);
+      const response = await this.sendToOllama(`${systemPrompt}\n\n${conversationContext}`);
       
       // Store conversation
       this.addToConversationHistory(message, response);
@@ -269,95 +222,30 @@ Focus on actionable advice for API testing, debugging, and optimization.`;
     return context + `\n\nHuman: ${newMessage}\nMark:`;
   }
 
-  /**
-   * Send message to Ollama
-   */
-  async sendToOllama(systemPrompt, conversationContext) {
-    const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
-      model: this.defaultModel,
-      prompt: `${systemPrompt}\n\n${conversationContext}`,
-      stream: false,
-      options: {
-        temperature: 0.7,
-        top_p: 0.9,
-        top_k: 40
-      }
-    }, {
-      timeout: this.timeout
-    });
-    
-    return response.data.response;
-  }
+
 
   /**
-   * Add to conversation history
-   */
-  addToConversationHistory(message, response) {
-    this.conversationHistory.push({
-      message,
-      response,
-      timestamp: new Date()
-    });
-    
-    // Keep history within limits
-    if (this.conversationHistory.length > this.maxHistoryLength) {
-      this.conversationHistory = this.conversationHistory.slice(-this.maxHistoryLength);
-    }
-  }
-
-  /**
-   * Get error response for user
+   * Get error response for user (Mark-specific)
    */
   getErrorResponse(error) {
-    if (error.message.includes('ECONNREFUSED')) {
-      return `🐐 Sorry, I'm having trouble connecting to my AI backend (Ollama). Please check if Ollama is running at ${this.ollamaUrl}`;
-    }
-    
-    if (error.message.includes('timeout')) {
-      return `🐐 I'm taking too long to respond. The AI service might be overloaded. Please try again in a moment.`;
-    }
-    
-    return `🐐 I encountered an error: ${error.message}. Please check the logs or try again.`;
+    return this.getOllamaErrorResponse(error, '🐐');
   }
 
-  /**
-   * Clear conversation history
-   */
-  clearConversationHistory() {
-    const historyCount = this.conversationHistory.length;
-    this.conversationHistory = [];
-    
-    logger.info('🐐 Mark conversation history cleared', { previousCount: historyCount });
-    return { cleared: historyCount };
-  }
-
-  /**
-   * Get conversation statistics
-   */
-  getConversationStats() {
-    return {
-      totalConversations: this.conversationHistory.length,
-      oldestConversation: this.conversationHistory[0]?.timestamp || null,
-      newestConversation: this.conversationHistory[this.conversationHistory.length - 1]?.timestamp || null,
-      averageMessageLength: this.conversationHistory.length > 0 
-        ? Math.round(this.conversationHistory.reduce((sum, conv) => sum + conv.message.length, 0) / this.conversationHistory.length)
-        : 0
-    };
-  }
 
   /**
    * Update configuration
    */
   updateConfiguration(newConfig) {
-    if (newConfig.ollamaUrl) this.ollamaUrl = newConfig.ollamaUrl;
-    if (newConfig.piApiUrl) this.piApiUrl = newConfig.piApiUrl;
-    if (newConfig.defaultModel) this.defaultModel = newConfig.defaultModel;
-    if (newConfig.timeout) this.timeout = newConfig.timeout;
+    const ollamaUpdated = this.updateOllamaConfiguration(newConfig);
     
-    logger.info('🐐 Mark configuration updated', newConfig);
+    if (newConfig.piApiUrl && newConfig.piApiUrl !== this.piApiUrl) {
+      this.piApiUrl = newConfig.piApiUrl;
+      logger.info('🐐 Mark Pi API URL updated', { piApiUrl: this.piApiUrl });
+    }
     
-    // Invalidate health check to force refresh
-    this.lastHealthCheck = null;
+    if (ollamaUpdated) {
+      this.lastHealthCheck = null; // Force health check refresh
+    }
     
     return this.getStatus();
   }

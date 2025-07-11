@@ -21,7 +21,13 @@
         "mark": "node bin/talk-to-mark.js",
         "chat": "node bin/talk-to-mark.js",
         "mark2": "node bin/talk-to-mark2.js",
-        "chat2": "node bin/talk-to-mark2.js"
+        "chat2": "node bin/talk-to-mark2.js",
+        "ops": "./scripts/ops-toolkit.sh",
+        "deploy": "./scripts/ops-toolkit.sh deploy",
+        "status": "./scripts/ops-toolkit.sh status",
+        "test:deployment": "./scripts/ops-toolkit.sh test",
+        "monitor": "./scripts/ops-toolkit.sh monitor",
+        "ssl": "./scripts/ops-toolkit.sh ssl"
     },
     "keywords": [
         "api",
