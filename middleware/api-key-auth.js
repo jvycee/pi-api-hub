@@ -57,10 +57,10 @@ class APIKeyAuth {
     // Admin tier key
     this.createAPIKey('admin-user', 'admin', 'Admin access for management');
     
-    // Log the actual keys for initial setup (remove this in production!)
+    // Security: Never log API keys in production
     const adminKeys = this.getKeysByTier('admin');
     if (adminKeys.length > 0) {
-      logger.info('🍌 ADMIN API KEY FOR SETUP:', adminKeys[0].key.replace('...', ''));
+      logger.info('🍌 Admin API key initialized (key hidden for security)');
     }
     
     logger.info('🍌 Default API keys created', {
@@ -71,12 +71,29 @@ class APIKeyAuth {
   }
   
   createAPIKey(name, tier = 'basic', description = '') {
+    // Input validation and sanitization
+    if (!name || typeof name !== 'string' || name.length < 1 || name.length > 100) {
+      throw new Error('Invalid name: must be a string between 1-100 characters');
+    }
+    
+    if (!['basic', 'premium', 'admin'].includes(tier)) {
+      throw new Error('Invalid tier: must be basic, premium, or admin');
+    }
+    
+    if (description && (typeof description !== 'string' || description.length > 500)) {
+      throw new Error('Invalid description: must be a string under 500 characters');
+    }
+    
+    // Sanitize inputs
+    const sanitizedName = name.replace(/[<>\"'&]/g, '').trim();
+    const sanitizedDescription = description ? description.replace(/[<>\"'&]/g, '').trim() : '';
+    
     const apiKey = 'pk_' + crypto.randomBytes(32).toString('hex');
     
     this.apiKeys.set(apiKey, {
-      name,
+      name: sanitizedName,
       tier,
-      description,
+      description: sanitizedDescription,
       createdAt: new Date(),
       lastUsed: null,
       isActive: true,
@@ -92,9 +109,9 @@ class APIKeyAuth {
       minuteStartTime: Date.now()
     });
     
-    // Log full key for admin during setup (remove in production!)
+    // Security: Never log full API keys
     if (tier === 'admin') {
-      logger.info('🍌 ADMIN API KEY FOR SETUP:', apiKey);
+      logger.info('🍌 Admin API key created (key hidden for security)');
     }
     
     logger.info('🍌 New API key created', {
@@ -230,24 +247,45 @@ class APIKeyAuth {
       const usage = this.keyUsage.get(apiKey);
       keys.push({
         key: apiKey.substring(0, 12) + '...',
-        fullKey: apiKey, // For admin purposes
+        keyId: crypto.createHash('sha256').update(apiKey).digest('hex').substring(0, 16), // Safe identifier
         ...data,
         usage: usage || {}
       });
     }
     return keys;
   }
+
+  // Separate method for setup only - returns full key
+  getAdminKeyForSetup() {
+    const adminKeys = this.getKeysByTier('admin');
+    if (adminKeys.length > 0) {
+      // Find the full key for the first admin
+      for (const [apiKey, data] of this.apiKeys.entries()) {
+        if (data.tier === 'admin') {
+          return apiKey;
+        }
+      }
+    }
+    return null;
+  }
   
   // Express middleware function
   middleware() {
     return (req, res, next) => {
-      // Skip authentication for public endpoints
-      if (req.path === '/health' || 
-          req.path === '/setup/admin-key' || 
-          req.path === '/dashboard.html' ||
-          req.path.startsWith('/dashboard') ||
-          req.path.startsWith('/monitoring/')) {
+      // Skip authentication for truly public endpoints only
+      const publicEndpoints = ['/health', '/setup/admin-key', '/dashboard.html'];
+      const publicPrefixes = ['/dashboard'];
+      
+      if (publicEndpoints.includes(req.path) || 
+          publicPrefixes.some(prefix => req.path.startsWith(prefix))) {
         return next();
+      }
+      
+      // Monitoring endpoints require authentication except health
+      if (req.path.startsWith('/monitoring/') && req.path !== '/monitoring/health') {
+        // Continue to authentication check below
+      } else if (req.path.startsWith('/monitoring/')) {
+        return next(); // Only /monitoring/health is public
       }
       
       // Extract API key from header

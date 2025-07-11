@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const logger = require('../shared/logger');
+const EndpointWrapper = require('../helpers/endpoint-wrapper');
 
 /**
  * 🍌 BANANA-POWERED API KEY MANAGEMENT ROUTES 🍌
@@ -15,100 +16,52 @@ const logger = require('../shared/logger');
 module.exports = (apiKeyAuth) => {
   
   // Get all API keys (admin only)
-  router.get('/keys', (req, res) => {
-    try {
-      // Only admin tier can view all keys
-      if (req.apiKeyData?.tier !== 'admin') {
-        return res.status(403).json({
-          success: false,
-          error: 'Admin access required',
-          timestamp: new Date().toISOString()
-        });
-      }
-      
+  router.get('/keys', EndpointWrapper.createAdminEndpoint(
+    (req) => {
       const keys = apiKeyAuth.getAllKeys();
       
-      res.json({
-        success: true,
-        data: {
-          keys: keys.map(key => ({
-            key: key.key,
-            name: key.name,
-            tier: key.tier,
-            description: key.description,
-            createdAt: key.createdAt,
-            lastUsed: key.lastUsed,
-            isActive: key.isActive,
-            requests: key.requests,
-            rateLimit: key.rateLimit,
-            usage: {
-              totalRequests: key.usage.totalRequests || 0,
-              requestsThisMinute: key.usage.requestsThisMinute || 0,
-              lastRequestTime: key.usage.lastRequestTime
-            }
-          })),
-          totalKeys: keys.length,
-          activeBKeys: keys.filter(k => k.isActive).length
-        },
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      logger.error('Failed to get API keys', { error: error.message });
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
+      return {
+        keys: keys.map(key => ({
+          key: key.key,
+          name: key.name,
+          tier: key.tier,
+          description: key.description,
+          createdAt: key.createdAt,
+          lastUsed: key.lastUsed,
+          isActive: key.isActive,
+          requests: key.requests,
+          rateLimit: key.rateLimit,
+          usage: {
+            totalRequests: key.usage.totalRequests || 0,
+            requestsThisMinute: key.usage.requestsThisMinute || 0,
+            lastRequestTime: key.usage.lastRequestTime
+          }
+        })),
+        totalKeys: keys.length,
+        activeKeys: keys.filter(k => k.isActive).length
+      };
+    },
+    { errorMessage: 'Failed to retrieve API keys' }
+  ));
   
   // Create new API key (admin only)
-  router.post('/keys', (req, res) => {
-    try {
-      // Only admin tier can create keys
-      if (req.apiKeyData?.tier !== 'admin') {
-        return res.status(403).json({
-          success: false,
-          error: 'Admin access required to create API keys',
-          timestamp: new Date().toISOString()
-        });
-      }
-      
+  router.post('/keys', EndpointWrapper.createAdminEndpoint(
+    (req) => {
       const { name, tier = 'basic', description = '' } = req.body;
       
       if (!name) {
-        return res.status(400).json({
-          success: false,
-          error: 'Name is required',
-          timestamp: new Date().toISOString()
-        });
+        const error = new Error('Name is required');
+        error.statusCode = 400;
+        throw error;
       }
       
       if (!['basic', 'premium', 'admin'].includes(tier)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid tier. Must be: basic, premium, or admin',
-          timestamp: new Date().toISOString()
-        });
+        const error = new Error('Invalid tier. Must be: basic, premium, or admin');
+        error.statusCode = 400;
+        throw error;
       }
       
       const newApiKey = apiKeyAuth.createAPIKey(name, tier, description);
-      
-      res.status(201).json({
-        success: true,
-        data: {
-          apiKey: newApiKey,
-          name,
-          tier,
-          description,
-          rateLimit: apiKeyAuth.defaultLimits[tier],
-          permissions: apiKeyAuth.permissions[tier],
-          createdAt: new Date().toISOString(),
-          warning: '🍌 Store this API key securely! It will not be shown again.'
-        },
-        timestamp: new Date().toISOString()
-      });
       
       logger.info('🍌 New API key created', {
         name,
@@ -116,54 +69,47 @@ module.exports = (apiKeyAuth) => {
         createdBy: req.apiKeyData?.name
       });
       
-    } catch (error) {
-      logger.error('Failed to create API key', { error: error.message });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create API key',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
+      return {
+        apiKey: newApiKey,
+        name,
+        tier,
+        description,
+        rateLimit: apiKeyAuth.defaultLimits[tier],
+        permissions: apiKeyAuth.permissions[tier],
+        createdAt: new Date().toISOString(),
+        warning: '🍌 Store this API key securely! It will not be shown again.'
+      };
+    },
+    { errorMessage: 'Failed to create API key' }
+  ));
   
   // Get current API key info
-  router.get('/me', (req, res) => {
-    try {
+  router.get('/me', EndpointWrapper.createGetEndpoint(
+    (req) => {
       const usage = apiKeyAuth.keyUsage.get(req.apiKey);
       
-      res.json({
-        success: true,
-        data: {
-          name: req.apiKeyData.name,
-          tier: req.apiKeyData.tier,
-          description: req.apiKeyData.description,
-          createdAt: req.apiKeyData.createdAt,
-          lastUsed: req.apiKeyData.lastUsed,
-          rateLimit: req.apiKeyData.rateLimit,
-          permissions: apiKeyAuth.permissions[req.apiKeyData.tier],
-          usage: {
-            totalRequests: usage?.totalRequests || 0,
-            requestsThisMinute: usage?.requestsThisMinute || 0,
-            remainingThisMinute: Math.max(0, req.apiKeyData.rateLimit - (usage?.requestsThisMinute || 0))
-          },
-          status: '🍌 Banana-powered and ready!'
+      return {
+        name: req.apiKeyData.name,
+        tier: req.apiKeyData.tier,
+        description: req.apiKeyData.description,
+        createdAt: req.apiKeyData.createdAt,
+        lastUsed: req.apiKeyData.lastUsed,
+        rateLimit: req.apiKeyData.rateLimit,
+        permissions: apiKeyAuth.permissions[req.apiKeyData.tier],
+        usage: {
+          totalRequests: usage?.totalRequests || 0,
+          requestsThisMinute: usage?.requestsThisMinute || 0,
+          remainingThisMinute: Math.max(0, req.apiKeyData.rateLimit - (usage?.requestsThisMinute || 0))
         },
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      logger.error('Failed to get API key info', { error: error.message });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get API key info',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
+        status: '🍌 Banana-powered and ready!'
+      };
+    },
+    { errorMessage: 'Failed to get API key info' }
+  ));
   
   // Get usage statistics
-  router.get('/stats', (req, res) => {
-    try {
+  router.get('/stats', EndpointWrapper.createGetEndpoint(
+    () => {
       const keys = apiKeyAuth.getAllKeys();
       
       // Calculate global stats
@@ -178,40 +124,29 @@ module.exports = (apiKeyAuth) => {
       // Current minute activity
       const currentMinuteRequests = keys.reduce((sum, key) => sum + (key.usage.requestsThisMinute || 0), 0);
       
-      res.json({
-        success: true,
-        data: {
-          overview: {
-            totalKeys: keys.length,
-            activeKeys,
-            totalRequests,
-            requestsThisMinute: currentMinuteRequests,
-            bananaStatus: '🍌 Maximum banana power engaged!'
-          },
-          keysByTier,
-          recentActivity: keys
-            .filter(key => key.lastUsed)
-            .sort((a, b) => new Date(b.lastUsed) - new Date(a.lastUsed))
-            .slice(0, 10)
-            .map(key => ({
-              name: key.name,
-              tier: key.tier,
-              lastUsed: key.lastUsed,
-              totalRequests: key.usage.totalRequests || 0
-            }))
+      return {
+        overview: {
+          totalKeys: keys.length,
+          activeKeys,
+          totalRequests,
+          requestsThisMinute: currentMinuteRequests,
+          bananaStatus: '🍌 Maximum banana power engaged!'
         },
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      logger.error('Failed to get API stats', { error: error.message });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get statistics',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
+        keysByTier,
+        recentActivity: keys
+          .filter(key => key.lastUsed)
+          .sort((a, b) => new Date(b.lastUsed) - new Date(a.lastUsed))
+          .slice(0, 10)
+          .map(key => ({
+            name: key.name,
+            tier: key.tier,
+            lastUsed: key.lastUsed,
+            totalRequests: key.usage.totalRequests || 0
+          }))
+      };
+    },
+    { errorMessage: 'Failed to get statistics' }
+  ));
   
   // Deactivate API key (admin only)
   router.patch('/keys/:keyPrefix/deactivate', (req, res) => {

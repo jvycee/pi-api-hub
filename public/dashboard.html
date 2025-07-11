@@ -457,31 +457,47 @@
                     return;
                 }
                 
-                // Check if we're accessing from localhost/local network - auto-get admin key
-                const hostname = window.location.hostname;
-                if (hostname === 'localhost' || 
-                    hostname === '127.0.0.1' || 
-                    hostname.startsWith('10.0.0.') || 
-                    hostname.startsWith('192.168.')) {
-                    
+                // Check for stored API key (session storage only)
+                const storedKey = sessionStorage.getItem('banana-api-key');
+                if (storedKey && storedKey.startsWith('pk_')) {
+                    // Validate stored key with server
                     try {
-                        // Auto-fetch admin key for local access
-                        const response = await fetch('/setup/admin-key');
-                        const data = await response.json();
-                        if (data.success) {
-                            this.apiKey = data.adminKey;
-                            console.log('🍌 Auto-authenticated for local access');
+                        const testResponse = await fetch('/api/keys/me', {
+                            headers: { 'X-API-Key': storedKey }
+                        });
+                        if (testResponse.ok) {
+                            this.apiKey = storedKey;
+                            console.log('🍌 Using stored API key');
                             return;
+                        } else {
+                            // Clear invalid stored key
+                            sessionStorage.removeItem('banana-api-key');
                         }
                     } catch (error) {
-                        console.log('Auto-auth failed, falling back to manual entry');
+                        sessionStorage.removeItem('banana-api-key');
                     }
                 }
                 
-                // Prompt for API key
-                const key = prompt('🍌 Enter your admin API key to access the Banana Security Command Center:');
+                // Manual API key entry (more secure)
+                const key = prompt('🛡️ Enter your API key to access the Banana Security Command Center:\n\n🔒 For localhost access, use the /setup/admin-key endpoint first');
                 if (key && key.startsWith('pk_')) {
-                    this.apiKey = key;
+                    // Validate key with server before storing
+                    try {
+                        const testResponse = await fetch('/api/keys/me', {
+                            headers: { 'X-API-Key': key }
+                        });
+                        if (testResponse.ok) {
+                            this.apiKey = key;
+                            // Store in session storage (not localStorage for security)
+                            sessionStorage.setItem('banana-api-key', key);
+                            console.log('🍌 API key validated and stored for session');
+                        } else {
+                            throw new Error('Invalid API key');
+                        }
+                    } catch (error) {
+                        alert('❌ Invalid API key or insufficient permissions');
+                        document.body.innerHTML = '<div style="text-align: center; color: #ff0000; font-size: 2em; margin-top: 50px;">🔒 ACCESS DENIED</div>';
+                    }
                 } else {
                     alert('❌ Invalid API key format. Must start with pk_');
                     document.body.innerHTML = '<div style="text-align: center; color: #ff0000; font-size: 2em; margin-top: 50px;">🔒 ACCESS DENIED</div>';

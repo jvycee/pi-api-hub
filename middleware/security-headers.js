@@ -16,18 +16,21 @@ class SecurityHeadersMiddleware {
 
   // Apply security headers
   applyHeaders(req, res, next) {
-    // Content Security Policy
+    // Content Security Policy - Enhanced
     if (this.options.contentSecurityPolicy) {
       res.setHeader('Content-Security-Policy', [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline'", // Needed for monitoring dashboard
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Needed for monitoring dashboard
         "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data:",
-        "connect-src 'self'",
-        "font-src 'self'",
+        "img-src 'self' data: blob:",
+        "connect-src 'self' localhost:* 127.0.0.1:*",
+        "font-src 'self' data:",
         "object-src 'none'",
         "media-src 'self'",
-        "frame-src 'none'"
+        "frame-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "upgrade-insecure-requests"
       ].join('; '));
     }
 
@@ -77,6 +80,16 @@ class SecurityHeadersMiddleware {
     // Custom security headers for API
     res.setHeader('X-API-Version', '2.0.0');
     res.setHeader('X-Security-Level', 'HIGH');
+    
+    // Additional security headers
+    res.setHeader('X-Download-Options', 'noopen');
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    // Security timing headers
+    res.setHeader('X-Response-Time-Start', Date.now());
     
     next();
   }
