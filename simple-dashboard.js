@@ -135,7 +135,7 @@ app.get('/dashboard', (req, res) => {
 // Proxy health check to main API
 app.get('/health', async (req, res) => {
     try {
-        const response = await axios.get(\`\${API_URL}/health\`, { timeout: 5000 });
+        const response = await axios.get(`${API_URL}/health`, { timeout: 5000 });
         res.json(response.data);
     } catch (error) {
         res.status(500).json({ status: 'error', message: 'Main API unreachable' });
@@ -143,13 +143,13 @@ app.get('/health', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(\`
+    console.log(`
 🎯 SIMPLE DASHBOARD RUNNING
 ==========================
-Dashboard: http://localhost:\${PORT}
-Main API:  \${API_URL}
+Dashboard: http://localhost:${PORT}
+Main API:  ${API_URL}
 
 This dashboard monitors your existing app.js
 Start your main API with: NODE_ENV=production node app.js
-\`);
+`);
 });
