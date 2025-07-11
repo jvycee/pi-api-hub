@@ -1,0 +1,126 @@
+{
+  "hubspot": {
+    "official": {
+      "enabled": true,
+      "packageName": "@hubspot/mcp-server",
+      "requiresAuth": true,
+      "authMethod": "private_app",
+      "description": "Official HubSpot MCP server with 20+ tools for CRM operations",
+      "capabilities": {
+        "oauth": ["hubspot-get-user-details"],
+        "objects": [
+          "hubspot-list-objects",
+          "hubspot-search-objects", 
+          "hubspot-batch-create-objects",
+          "hubspot-batch-update-objects",
+          "hubspot-batch-read-objects",
+          "hubspot-get-schemas"
+        ],
+        "properties": [
+          "hubspot-list-properties",
+          "hubspot-get-property",
+          "hubspot-create-property",
+          "hubspot-update-property"
+        ],
+        "associations": [
+          "hubspot-batch-create-associations",
+          "hubspot-list-associations",
+          "hubspot-get-association-definitions"
+        ],
+        "engagements": [
+          "hubspot-create-engagement",
+          "hubspot-get-engagement",
+          "hubspot-update-engagement"
+        ],
+        "workflows": [
+          "hubspot-list-workflows",
+          "hubspot-get-workflow"
+        ],
+        "links": [
+          "hubspot-generate-feedback-link",
+          "hubspot-get-link"
+        ]
+      }
+    },
+    "banana": {
+      "enabled": true,
+      "packageName": "internal",
+      "requiresAuth": true,
+      "authMethod": "api_key",
+      "description": "Banana-powered optimized HubSpot endpoints with caching and streaming",
+      "capabilities": {
+        "contacts": [
+          "get_contacts_cached",
+          "get_contacts_streaming",
+          "create_contact_optimized"
+        ],
+        "search": [
+          "search_cached",
+          "search_streaming"
+        ],
+        "graphql": [
+          "graphql_optimized",
+          "graphql_streaming"
+        ],
+        "analytics": [
+          "usage_analytics",
+          "performance_metrics"
+        ]
+      }
+    }
+  },
+  "routing": {
+    "strategy": "hybrid",
+    "rules": [
+      {
+        "condition": "simple_reads",
+        "route_to": "banana",
+        "reason": "Use cached responses for better performance"
+      },
+      {
+        "condition": "complex_operations",
+        "route_to": "official",
+        "reason": "Use official tools for advanced CRM operations"
+      },
+      {
+        "condition": "batch_operations",
+        "route_to": "official",
+        "reason": "Official tools optimized for batch operations"
+      },
+      {
+        "condition": "streaming_requested",
+        "route_to": "banana",
+        "reason": "Custom streaming implementation"
+      }
+    ]
+  },
+  "clients": {
+    "claude_desktop": {
+      "enabled": true,
+      "config_path": "~/Library/Application Support/Claude/claude_desktop_config.json",
+      "server_command": "node",
+      "server_args": ["mcp-server/hybrid-server.js"],
+      "env_vars": {
+        "PRIVATE_APP_ACCESS_TOKEN": "${HUBSPOT_PRIVATE_APP_TOKEN}",
+        "BANANA_API_KEY": "${BANANA_ADMIN_KEY}"
+      }
+    },
+    "cursor": {
+      "enabled": true,
+      "config_path": ".cursor/mcp.json",
+      "server_command": "node",
+      "server_args": ["mcp-server/hybrid-server.js"],
+      "env_vars": {
+        "PRIVATE_APP_ACCESS_TOKEN": "${HUBSPOT_PRIVATE_APP_TOKEN}",
+        "BANANA_API_KEY": "${BANANA_ADMIN_KEY}"
+      }
+    }
+  },
+  "monitoring": {
+    "enabled": true,
+    "track_usage": true,
+    "track_performance": true,
+    "track_errors": true,
+    "alert_on_failures": true
+  }
+}

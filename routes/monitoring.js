@@ -48,6 +48,78 @@ module.exports = (components, requireAdminAuth) => {
   router.get('/cluster-scaling', monitoringController.getClusterScaling);
   router.get('/ollama-status', monitoringController.getOllamaStatus);
 
+  // 🍌 MCP MONITORING ROUTES 🍌
+  router.get('/mcp/status', requireAdminAuth, (req, res) => {
+    const MCPClientConfig = require('../helpers/mcp-client-config');
+    const clientConfig = new MCPClientConfig();
+    
+    clientConfig.getStatus().then(status => {
+      res.json({
+        success: true,
+        data: status,
+        timestamp: new Date().toISOString()
+      });
+    }).catch(error => {
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    });
+  });
+
+  router.get('/mcp/tools', requireAdminAuth, (req, res) => {
+    const mcpConfig = require('../config/mcp-config.json');
+    const tools = {
+      official: mcpConfig.hubspot.official.capabilities,
+      banana: mcpConfig.hubspot.banana.capabilities,
+      routing: mcpConfig.routing
+    };
+    
+    res.json({
+      success: true,
+      data: tools,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  router.post('/mcp/setup/:client', requireAdminAuth, async (req, res) => {
+    const { client } = req.params;
+    const MCPClientConfig = require('../helpers/mcp-client-config');
+    const clientConfig = new MCPClientConfig();
+    
+    try {
+      const config = await clientConfig.generateConfig(client, clientConfig.configs[client]);
+      const mergedConfig = await clientConfig.mergeConfig(client, config);
+      await clientConfig.writeConfig(client, mergedConfig);
+      
+      res.json({
+        success: true,
+        message: `MCP configuration updated for ${client}`,
+        config: mergedConfig,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  router.get('/mcp/instructions', (req, res) => {
+    const MCPClientConfig = require('../helpers/mcp-client-config');
+    const clientConfig = new MCPClientConfig();
+    const instructions = clientConfig.generateSetupInstructions();
+    
+    res.json({
+      success: true,
+      data: instructions,
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // Cache management routes
   router.get('/cache', cacheController.getStats);
   router.post('/cache/clear', requireAdminAuth, cacheController.clearCache);
