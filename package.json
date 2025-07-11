@@ -19,7 +19,9 @@
         "test:watch": "jest --watch --maxWorkers=1",
         "test:coverage": "jest --coverage --maxWorkers=2",
         "mark": "node bin/talk-to-mark.js",
-        "chat": "node bin/talk-to-mark.js"
+        "chat": "node bin/talk-to-mark.js",
+        "mark2": "node bin/talk-to-mark2.js",
+        "chat2": "node bin/talk-to-mark2.js"
     },
     "keywords": [
         "api",

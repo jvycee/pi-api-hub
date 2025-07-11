@@ -642,7 +642,42 @@
             
             async loadAIData() {
                 try {
-                    // Try to check Ollama health via Pi API Hub proxy (if endpoint exists)
+                    // Try dedicated Mark API endpoints first
+                    const markHealthResponse = await fetch('/api/mark/health');
+                    if (markHealthResponse.ok) {
+                        const markHealth = await markHealthResponse.json();
+                        
+                        if (markHealth.success && markHealth.data) {
+                            const health = markHealth.data;
+                            
+                            // Update Ollama status based on Mark's health check
+                            if (health.ollamaStatus.healthy) {
+                                document.getElementById('ollama-health').textContent = '🟢 HEALTHY';
+                                document.getElementById('active-model').textContent = health.ollamaStatus.activeModel;
+                            } else {
+                                document.getElementById('ollama-health').textContent = '🔴 OFFLINE';
+                                document.getElementById('active-model').textContent = 'N/A';
+                            }
+                            
+                            // Update Mark status
+                            if (health.markAvailable) {
+                                document.getElementById('mark-status').textContent = '🐐 READY TO CHAT';
+                            } else {
+                                document.getElementById('mark-status').textContent = '😴 UNAVAILABLE';
+                            }
+                            
+                            this.updateOllamaChart({ 
+                                healthy: health.ollamaStatus.healthy, 
+                                modelCount: health.ollamaStatus.modelCount || 0, 
+                                activeModel: health.ollamaStatus.activeModel || 'N/A',
+                                markAvailable: health.markAvailable,
+                                conversationCount: health.conversationCount || 0
+                            });
+                            return;
+                        }
+                    }
+                    
+                    // Fallback: Try legacy endpoint
                     const ollamaResponse = await fetch('/monitoring/ollama-status');
                     
                     if (ollamaResponse.ok) {

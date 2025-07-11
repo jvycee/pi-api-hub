@@ -55,22 +55,46 @@ class MarkChat {
       console.log(chalk.red('❌ Pi API Hub: Connection failed'));
     }
 
-    // Test AI connectivity with simple message
+    // Test Mark service health first
     try {
-      const testResponse = await axios.post(`${this.ollamaUrl}/api/generate`, {
-        model: 'llama3.2:latest',
-        prompt: 'Hello',
-        stream: false
-      }, { timeout: 10000 });
-      
-      if (testResponse.data && testResponse.data.response) {
+      const markHealthResponse = await axios.get(`${this.piApiUrl}/api/mark/health`, { timeout: 5000 });
+      if (markHealthResponse.data.success && markHealthResponse.data.data.markAvailable) {
         diagnostics.aiConnectivity = true;
-        console.log(chalk.green('✅ AI Connectivity: Working'));
+        console.log(chalk.green('✅ Mark Service: Available and ready'));
+        console.log(chalk.gray('   Ollama Status:'), markHealthResponse.data.data.ollamaStatus.healthy ? chalk.green('Healthy') : chalk.red('Offline'));
+        
+        // Test Mark chat functionality
+        const testResponse = await axios.post(`${this.piApiUrl}/api/mark/chat`, {
+          message: 'Hello Mark, please respond with a brief test message.'
+        }, { timeout: 10000 });
+        
+        if (testResponse.data.success && testResponse.data.data.response) {
+          console.log(chalk.green('✅ Mark Chat: Functional'));
+        }
       } else {
-        console.log(chalk.red('❌ AI Connectivity: Invalid response'));
+        console.log(chalk.red('❌ Mark Service: Unavailable'));
+        throw new Error('Mark service unavailable');
       }
     } catch (error) {
-      console.log(chalk.red('❌ AI Connectivity: Failed'));
+      console.log(chalk.red('❌ Mark Service: Connection failed, trying direct Ollama...'));
+      
+      // Fallback: Test AI connectivity with direct Ollama connection
+      try {
+        const testResponse = await axios.post(`${this.ollamaUrl}/api/generate`, {
+          model: 'llama3.2:latest',
+          prompt: 'Hello',
+          stream: false
+        }, { timeout: 10000 });
+        
+        if (testResponse.data && testResponse.data.response) {
+          diagnostics.aiConnectivity = true;
+          console.log(chalk.green('✅ AI Connectivity (Direct): Working'));
+        } else {
+          console.log(chalk.red('❌ AI Connectivity: Invalid response'));
+        }
+      } catch (directError) {
+        console.log(chalk.red('❌ AI Connectivity: Failed'));
+      }
     }
 
     // Test specific commands
@@ -228,23 +252,49 @@ Current conversation context: ${this.conversationHistory.slice(-3).map(h => `${h
 User: ${contextualPrompt}
 Mark:`;
 
-      const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
-        model: 'llama3.2:latest',
-        prompt: systemPrompt,
-        stream: false,
-        options: {
-          temperature: 0.7,
-          max_tokens: 2000
-        }
-      }, {
-        timeout: 60000,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      // Try using Mark service first
+      let markResponse, provider = 'mark-service';
+      try {
+        const markServiceResponse = await axios.post(`${this.piApiUrl}/api/mark/chat`, {
+          message: userMessage,
+          context: {
+            source: 'cli',
+            conversationHistory: this.conversationHistory.slice(-5) // Send recent context
+          }
+        }, {
+          timeout: 60000,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
 
-      const markResponse = response.data.response;
-      const provider = 'ollama';
+        if (markServiceResponse.data.success && markServiceResponse.data.data.response) {
+          markResponse = markServiceResponse.data.data.response;
+        } else {
+          throw new Error('Mark service returned invalid response');
+        }
+      } catch (error) {
+        console.log(chalk.yellow('⚠️  Mark service unavailable, falling back to direct Ollama...'));
+        
+        // Fallback to direct Ollama connection
+        const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
+          model: 'llama3.2:latest',
+          prompt: systemPrompt,
+          stream: false,
+          options: {
+            temperature: 0.7,
+            max_tokens: 2000
+          }
+        }, {
+          timeout: 60000,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        markResponse = response.data.response;
+        provider = 'ollama-direct';
+      }
       
       // Add to conversation history
       this.conversationHistory.push(

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Mark2 - General Purpose AI Assistant Launcher
+# Independent of Pi API Hub infrastructure
+
+cd "$(dirname "$0")"
+node bin/talk-to-mark2.js "$@"

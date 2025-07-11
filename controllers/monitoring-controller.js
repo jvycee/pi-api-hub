@@ -234,30 +234,28 @@ class MonitoringController {
     { errorMessage: 'Failed to get cluster scaling information' }
   );
 
-  // Ollama status endpoint
+  // Ollama status endpoint (legacy - will be deprecated in favor of dedicated Mark endpoints)
   getOllamaStatus = EndpointWrapper.createGetEndpoint(
     async () => {
       try {
-        const axios = require('axios');
-        const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
+        const { getMarkService } = require('../services/mark-service');
+        const markService = getMarkService();
         
-        const ollamaResponse = await axios.get(`${ollamaUrl}/api/tags`, { 
-          timeout: 5000,
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        const models = ollamaResponse.data.models || [];
-        const defaultModel = models.find(m => m.name.includes('llama3.2:latest')) || 
-                            models.find(m => m.name.includes('llama3.2')) ||
-                            models[0];
+        // Get Mark's health status which includes Ollama information
+        const markHealth = await markService.checkHealth();
         
         return {
-          ollamaHealthy: true,
-          markStatus: 'ready',
-          activeModel: defaultModel ? defaultModel.name : 'No models found',
-          modelCount: models.length,
-          models: models.map(m => ({ name: m.name, size: m.size })),
-          ollamaUrl: ollamaUrl
+          ollamaHealthy: markHealth.ollamaStatus.healthy,
+          markStatus: markHealth.markAvailable ? 'ready' : 'unavailable',
+          activeModel: markHealth.ollamaStatus.activeModel || 'N/A',
+          modelCount: markHealth.ollamaStatus.modelCount || 0,
+          models: markHealth.ollamaStatus.models || [],
+          ollamaUrl: markService.ollamaUrl,
+          markService: {
+            available: markHealth.markAvailable,
+            lastCheck: markHealth.lastCheck,
+            conversationCount: markHealth.conversationCount
+          }
         };
         
       } catch (error) {

@@ -213,6 +213,12 @@ app.use('/api/hubspot', require('./routes/hubspot')({
   cursorPagination
 }, inputValidator));
 
+// 🐐 Mark AI Assistant routes
+app.use('/api/mark', require('./routes/mark-routes'));
+
+// 🐘 Mark2 General Purpose AI Assistant routes
+app.use('/api/mark2', require('./routes/mark2-routes'));
+
 // AI endpoint with smart routing
 const AIController = require('./controllers/ai-controller');
 const aiController = new AIController(aiHandler);
