@@ -113,6 +113,21 @@ class ConfigManager {
                 }).default()
             }).default(),
 
+            cluster: Joi.object({
+                enabled: Joi.boolean().default(true),
+                workers: Joi.object({
+                    min: Joi.number().default(1),
+                    max: Joi.number().default(4),
+                    target: Joi.number().optional(),
+                    scaling: Joi.object({
+                        enabled: Joi.boolean().default(true),
+                        scaleUpThreshold: Joi.number().default(0.8),
+                        scaleDownThreshold: Joi.number().default(0.3),
+                        cooldown: Joi.number().default(30000)
+                    }).default()
+                }).default()
+            }).default(),
+
             mcp: Joi.object({
                 mode: Joi.string().valid('hybrid', 'official', 'banana').default('hybrid'),
                 server: Joi.object({
