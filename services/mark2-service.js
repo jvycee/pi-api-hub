@@ -254,7 +254,8 @@ Be helpful, engaging, and adapt your response style to the user's needs. Use the
       return `Mark2 Conversation Export\nExported: ${exportData.exportedAt}\nTotal: ${exportData.totalConversations}\n\n${textExport}`;
     }
     
-    return format === 'json' ? JSON.stringify(exportData, null, 2) : exportData;
+    const { safeStringify } = require('../shared/safe-json');
+    return format === 'json' ? safeStringify(exportData) : exportData;
   }
 
   /**

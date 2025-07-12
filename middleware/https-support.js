@@ -11,12 +11,16 @@ class HttpsSupport {
   }
 
   setupHttpsOptions() {
-    // Check for SSL certificates
     const certPath = process.env.SSL_CERT_PATH || path.join(__dirname, '../certs/server.crt');
     const keyPath = process.env.SSL_KEY_PATH || path.join(__dirname, '../certs/server.key');
     
+    // Carmack-style environment validation
+    if (process.env.NODE_ENV === 'production' && 
+        (keyPath.includes('certs/server.key') || certPath.includes('certs/server.crt'))) {
+      logger.warn('⚠️  Dev certs in production - consider proper certificates');
+    }
+    
     try {
-      // Check if certificate files exist
       if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
         this.httpsOptions = {
           key: fs.readFileSync(keyPath),

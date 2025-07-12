@@ -19,6 +19,33 @@ let stats = { anthropic: 0, ollama: 0, errors: 0, requests: 0 };
 let ollamaHealthy = false;
 let lastCheck = 0;
 
+// Pi Guardian - Carmack ultra-minimal hardware monitoring
+let piHealth = { temp: 0, throttled: false, storage: 100, lastPiCheck: 0 };
+
+async function checkPi() {
+  if (Date.now() - piHealth.lastPiCheck < 30000) return piHealth;
+  try {
+    const { exec } = require('child_process');
+    const execPromise = (cmd) => new Promise((resolve, reject) => {
+      exec(cmd, { timeout: 5000 }, (err, stdout) => err ? reject(err) : resolve(stdout.trim()));
+    });
+    
+    const temp = await execPromise('vcgencmd measure_temp');
+    piHealth.temp = parseFloat(temp.match(/[\d.]+/)[0]);
+    
+    const throttled = await execPromise('vcgencmd get_throttled');
+    piHealth.throttled = throttled.includes('0x50000') || throttled.includes('0x50005');
+    
+    const df = await execPromise('df / | tail -1');
+    piHealth.storage = 100 - parseInt(df.split(/\s+/)[4].replace('%', ''));
+    
+    if (piHealth.temp > 75) log(`🔥 Pi temp high: ${piHealth.temp}°C`);
+    
+  } catch { /* Pi commands not available */ }
+  piHealth.lastPiCheck = Date.now();
+  return piHealth;
+}
+
 // Ultra-simple logger
 const log = (msg, data = '') => console.log(`[${new Date().toISOString().slice(11,19)}] ${msg}`, data);
 
@@ -98,13 +125,18 @@ app.use(express.json());
 app.use((req, res, next) => { stats.requests++; log(`${req.method} ${req.path}`); next(); });
 
 // Routes
-app.get('/health', (req, res) => res.json({ 
-  status: 'ok', uptime: process.uptime(), requests: stats.requests 
-}));
+app.get('/health', async (req, res) => {
+  const pi = await checkPi();
+  res.json({ 
+    status: 'ok', uptime: process.uptime(), requests: stats.requests,
+    pi: { temp: pi.temp + '°C', throttled: pi.throttled, storage: pi.storage + '% free' }
+  });
+});
 
 app.get('/stats', async (req, res) => res.json({
   ...stats, ollamaHealthy: await checkOllama(), 
-  anthropicConfigured: !!CFG.anthropic, total: stats.anthropic + stats.ollama
+  anthropicConfigured: !!CFG.anthropic, total: stats.anthropic + stats.ollama,
+  pi: await checkPi()
 }));
 
 app.post('/api/anthropic/messages', async (req, res) => {
@@ -167,9 +199,13 @@ if (process.argv[2] === 'mark' || process.argv[2] === 'mark2') {
   // Server mode
   app.listen(CFG.port, () => {
     log(`Ultra-minimal Pi API Hub started on :${CFG.port}`);
-    console.log(`\n🎯 CARMACK ULTRA-MINIMAL EDITION
-====================================
-Lines of code: ~120 (70% reduction!)
+    
+    // Start Pi monitoring
+    setInterval(checkPi, 60000);
+    
+    console.log(`\n🎯 CARMACK ULTRA-MINIMAL EDITION + PI GUARDIAN
+================================================
+Lines of code: ~140 (Pi hardware monitoring included!)
 Server: http://localhost:${CFG.port}
 
 Usage:

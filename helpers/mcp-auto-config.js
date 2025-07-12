@@ -376,7 +376,8 @@ class MCPAutoConfig {
     try {
       await fs.access(configPath);
       const configContent = await fs.readFile(configPath, 'utf8');
-      const config = JSON.parse(configContent);
+      const { safeParse } = require('../shared/safe-json');
+      const config = safeParse(configContent, {});
 
       result.configured = true;
 

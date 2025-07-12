@@ -62,7 +62,8 @@ class SimpleAuth {
   async loadUsers() {
     try {
       const data = await fs.readFile(this.usersFile, 'utf8');
-      const users = JSON.parse(data);
+      const { safeParse } = require('../shared/safe-json');
+      const users = safeParse(data, {});
       
       this.users.clear();
       Object.entries(users).forEach(([userId, user]) => {

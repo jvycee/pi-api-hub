@@ -559,7 +559,8 @@ Be specific and actionable. Consider that this is a Raspberry Pi 5 system with 8
         return [];
       }
       
-      const parsed = JSON.parse(jsonMatch[0]);
+      const { safeParse } = require('../shared/safe-json');
+      const parsed = safeParse(jsonMatch[0]);
       
       if (!parsed.suggestions || !Array.isArray(parsed.suggestions)) {
         logger.warn('Invalid suggestions format from Ollama');

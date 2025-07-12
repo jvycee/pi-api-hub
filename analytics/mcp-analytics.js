@@ -43,27 +43,13 @@ class MCPAnalytics {
    * Start analytics data collection
    */
   startAnalyticsCollection() {
-    // Update real-time metrics every 10 seconds
-    const realTimeInterval = setInterval(() => {
-      this.updateRealTimeMetrics();
-    }, 10000);
-
-    // Aggregate data every minute
-    const aggregationInterval = setInterval(() => {
-      this.aggregateMinuteData();
-    }, 60000);
-
-    // Generate insights every 5 minutes
-    const insightsInterval = setInterval(() => {
-      this.generateInsights();
-    }, 300000);
-
-    // Clean up old data every hour
-    const cleanupInterval = setInterval(() => {
-      this.cleanupOldData();
-    }, 3600000);
-
-    this.intervalCollectors = [realTimeInterval, aggregationInterval, insightsInterval, cleanupInterval];
+    const { safeInterval } = require('../shared/interval-manager');
+    
+    // Carmack-style managed intervals
+    safeInterval(() => this.updateRealTimeMetrics(), 10000);
+    safeInterval(() => this.aggregateMinuteData(), 60000);
+    safeInterval(() => this.generateInsights(), 300000);
+    safeInterval(() => this.cleanupOldData(), 3600000);
   }
 
   /**

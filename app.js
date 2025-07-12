@@ -17,6 +17,7 @@ const LogRotator = require('./monitoring/log-rotator');
 const PerformanceCollector = require('./monitoring/performance-collector');
 const PredictiveHealthMonitor = require('./monitoring/predictive-health-monitor');
 const AutoRestartManager = require('./monitoring/auto-restart');
+const PiGuardian = require('./monitoring/pi-guardian');
 const AnalyticsDashboard = require('./analytics/analytics-dashboard');
 const DependencyScanner = require('./security/dependency-scanner');
 const InputValidationSchemas = require('./middleware/input-validation-schemas');
@@ -63,6 +64,7 @@ const logRotator = new LogRotator();
 const performanceCollector = new PerformanceCollector();
 const predictiveHealthMonitor = new PredictiveHealthMonitor(performanceCollector);
 const autoRestart = new AutoRestartManager();
+const piGuardian = new PiGuardian();
 const analyticsDashboard = new AnalyticsDashboard(analyticsMiddleware);
 const dependencyScanner = new DependencyScanner();
 
@@ -145,6 +147,7 @@ app.get('/health', (req, res) => {
   // Detailed health info requires authentication
   if (req.apiKeyData) {
     const memoryStatus = memoryMonitor.getStatus();
+    const piHealth = piGuardian.getStatus();
     const queueStatus = requestQueue.getHealth();
     
     basicHealth.detailed = {
@@ -159,6 +162,12 @@ app.get('/health', (req, res) => {
         },
         requestQueue: {
           status: queueStatus.health === 'healthy' ? 'normal' : 'degraded'
+        },
+        hardware: {
+          temperature: piHealth.temperature + '°C',
+          status: piHealth.status,
+          throttled: piHealth.throttled,
+          storage: piHealth.diskHealth + '% free'
         }
       },
       configuration: config.healthCheck(),
@@ -309,7 +318,9 @@ app.use((req, res) => {
 // Start server only if not being imported by tests or running as cluster worker
 if (require.main === module || process.env.NODE_CLUSTER_WORKER) {
   const serverConfig = config.getServerConfig();
-  const server = app.listen(serverConfig.port, serverConfig.host, () => {
+  // Carmack-style localhost binding for security
+  const HOST = serverConfig.host || '127.0.0.1';
+  const server = app.listen(serverConfig.port, HOST, () => {
     logger.info(`🍌 BANANA-POWERED API SERVER ACTIVATED! 🍌 (GitHub Actions Test)`);
     logger.info(`Port: ${serverConfig.port}`);
     logger.info(`Environment: ${serverConfig.env}`);
