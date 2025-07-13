@@ -1,0 +1,50 @@
+{
+  "default": {
+    "name": "Default Tenant",
+    "description": "Default tenant for Pi API Hub",
+    "status": "active",
+    "features": {
+      "analytics": true,
+      "aiRouting": true,
+      "webhooks": true
+    },
+    "limits": {
+      "requestsPerHour": 10000,
+      "maxUsers": 10
+    },
+    "createdAt": 1720559400000,
+    "updatedAt": 1720559400000
+  },
+  "demo": {
+    "name": "Demo Tenant",
+    "description": "Demo tenant for testing multi-tenant features",
+    "status": "active",
+    "features": {
+      "analytics": true,
+      "aiRouting": true,
+      "webhooks": false
+    },
+    "limits": {
+      "requestsPerHour": 1000,
+      "maxUsers": 3
+    },
+    "createdAt": 1720559400000,
+    "updatedAt": 1720559400000
+  },
+  "test": {
+    "name": "Test Tenant",
+    "description": "Test tenant for development",
+    "status": "active",
+    "features": {
+      "analytics": false,
+      "aiRouting": true,
+      "webhooks": true
+    },
+    "limits": {
+      "requestsPerHour": 500,
+      "maxUsers": 1
+    },
+    "createdAt": 1720559400000,
+    "updatedAt": 1720559400000
+  }
+}
