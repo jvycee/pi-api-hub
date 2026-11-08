@@ -76,7 +76,14 @@ class RequestQueue {
       // Check if we're at capacity
       if (this.activeRequests >= this.maxConcurrent) {
         const entry = { req, res, next, timer: null, discardIfQueued: null };
-        entry.discardIfQueued = () => this.discardQueued(entry);
+        // IncomingMessage 'close' also fires after a fully read body while
+        // the response is still open. Response 'close' is the transport signal:
+        // premature disconnect leaves writableEnded false; a finished response
+        // closes only after writableEnded is true.
+        entry.discardIfQueued = () => {
+          if (res.writableEnded || res.writableFinished) return false;
+          return this.discardQueued(entry);
+        };
         this.queue.push(entry);
         this.totalQueued++;
         const dynamicTimeout = this.calculateDynamicTimeout();
@@ -90,7 +97,7 @@ class RequestQueue {
             queueStats: this.getStats()
           });
         }, dynamicTimeout);
-        req.once('close', entry.discardIfQueued);
+        res.once('close', entry.discardIfQueued);
         
         logger.info('Request queued due to high load', {
           path: req.path,
@@ -122,7 +129,7 @@ class RequestQueue {
       entry.timer = null;
     }
     if (entry.discardIfQueued) {
-      entry.req.removeListener('close', entry.discardIfQueued);
+      entry.res.removeListener('close', entry.discardIfQueued);
     }
   }
 

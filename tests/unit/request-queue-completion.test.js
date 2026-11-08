@@ -68,7 +68,7 @@ describe('request queue completion', () => {
     expect(queue.queue).toHaveLength(0);
   });
 
-  test('a closed waiter leaves the queue and is not started later', async () => {
+  test('request close after a finished body keeps a waiter whose response is still open', async () => {
     const queue = createQueue();
     const middleware = queue.middleware();
     const started = [];
@@ -80,17 +80,45 @@ describe('request queue completion', () => {
 
     middleware(req1, res1, () => started.push('first'));
     middleware(req2, res2, () => started.push('second'));
+
+    // Node IncomingMessage emits 'close' when the body is complete, with the
+    // response still writable. That must not drop the waiter.
+    req2.complete = true;
     req2.emit('close');
 
+    expect(queue.queue).toHaveLength(1);
+    expect(res2.writableEnded).toBe(false);
+
+    res1.emit('finish');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(started).toEqual(['first', 'second']);
+    expect(queue.activeRequests).toBe(1);
     expect(queue.queue).toHaveLength(0);
+  });
+
+  test('response close before the response ends drops the waiter', async () => {
+    const queue = createQueue();
+    const middleware = queue.middleware();
+    const started = [];
+
+    const req1 = mockReq();
+    const res1 = mockRes();
+    const req2 = mockReq();
+    const res2 = mockRes();
+
+    middleware(req1, res1, () => started.push('first'));
+    middleware(req2, res2, () => started.push('second'));
+    res2.emit('close');
+
+    expect(queue.queue).toHaveLength(0);
+    expect(res2.body).toBeNull();
 
     res1.emit('finish');
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(started).toEqual(['first']);
     expect(queue.activeRequests).toBe(0);
-    expect(res2.statusCode).toBe(200);
-    expect(res2.body).toBeNull();
   });
 
   test('a queued request times out once', () => {
@@ -113,6 +141,16 @@ describe('request queue completion', () => {
       success: false,
       error: 'Request timeout in queue'
     }));
+
+    res2.writableEnded = true;
+    res2.emit('close');
+    res2.emit('finish');
+
+    expect(res2.body).toEqual(expect.objectContaining({
+      success: false,
+      error: 'Request timeout in queue'
+    }));
+    expect(queue.queue).toHaveLength(0);
 
     jest.useRealTimers();
   });
