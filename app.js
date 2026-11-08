@@ -7,6 +7,7 @@ const streamTracker = require('./shared/stream-tracker');
 const ResponseHelper = require('./shared/response-helper');
 const MonitoringFactory = require('./shared/monitoring-factory');
 const MiddlewareFactory = require('./middleware/middleware-factory');
+const IntelligentCache = require('./middleware/intelligent-cache');
 const EndpointWrapper = require('./helpers/endpoint-wrapper');
 const CSRFProtection = require('./middleware/csrf-protection');
 const SessionSecurity = require('./middleware/session-security');
@@ -123,7 +124,8 @@ app.use('/api/hubspot/contacts', intelligentCache.middleware({
 
 app.use('/api/hubspot/search', intelligentCache.middleware({
   ttl: 120000, // 2 minutes for search results
-  skipCache: (req) => req.method !== 'POST' // Only cache POST requests
+  skipCache: (req) => req.method !== 'POST', // Only cache POST requests
+  keyGenerator: (req) => IntelligentCache.requestCacheKey(req, { includeBody: true })
 }));
 
 // Request logging middleware

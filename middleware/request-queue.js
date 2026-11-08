@@ -75,8 +75,22 @@ class RequestQueue {
     return (req, res, next) => {
       // Check if we're at capacity
       if (this.activeRequests >= this.maxConcurrent) {
-        this.queue.push({ req, res, next });
+        const entry = { req, res, next, timer: null, discardIfQueued: null };
+        entry.discardIfQueued = () => this.discardQueued(entry);
+        this.queue.push(entry);
         this.totalQueued++;
+        const dynamicTimeout = this.calculateDynamicTimeout();
+        entry.timer = setTimeout(() => {
+          if (!this.discardQueued(entry)) return;
+          if (res.headersSent || res.writableEnded) return;
+          res.status(503).json({
+            success: false,
+            error: 'Request timeout in queue',
+            timeout: `${dynamicTimeout}ms`,
+            queueStats: this.getStats()
+          });
+        }, dynamicTimeout);
+        req.once('close', entry.discardIfQueued);
         
         logger.info('Request queued due to high load', {
           path: req.path,
@@ -85,30 +99,31 @@ class RequestQueue {
           activeRequests: this.activeRequests
         });
         
-        // Set a dynamic timeout for queued requests
-        const dynamicTimeout = this.calculateDynamicTimeout();
-        const timeout = setTimeout(() => {
-          const index = this.queue.findIndex(item => item.req === req);
-          if (index !== -1) {
-            this.queue.splice(index, 1);
-            res.status(503).json({
-              success: false,
-              error: 'Request timeout in queue',
-              timeout: `${dynamicTimeout}ms`,
-              queueStats: this.getStats()
-            });
-          }
-        }, dynamicTimeout);
-        
-        // Clear timeout when request is processed
-        req.on('close', () => clearTimeout(timeout));
-        
         return;
       }
 
       // Process the request
       this.processRequest(req, res, next);
     };
+  }
+
+  discardQueued(entry) {
+    const index = this.queue.indexOf(entry);
+    if (index === -1) return false;
+    this.queue.splice(index, 1);
+    this.detachQueuedEntry(entry);
+    return true;
+  }
+
+  detachQueuedEntry(entry) {
+    if (!entry) return;
+    if (entry.timer) {
+      clearTimeout(entry.timer);
+      entry.timer = null;
+    }
+    if (entry.discardIfQueued) {
+      entry.req.removeListener('close', entry.discardIfQueued);
+    }
   }
 
   processRequest(req, res, next) {
@@ -156,8 +171,11 @@ class RequestQueue {
       res._queueSizeLimited = true;
     }
 
-    // Track request completion
+    // finish, close, and error can all fire for one response.
+    let released = false;
     const cleanup = () => {
+      if (released) return;
+      released = true;
       this.activeRequests--;
       this.totalProcessed++;
       
@@ -183,15 +201,16 @@ class RequestQueue {
       // Process next request in queue
       if (this.queue.length > 0) {
         const nextRequest = this.queue.shift();
+        this.detachQueuedEntry(nextRequest);
         setImmediate(() => {
           this.processRequest(nextRequest.req, nextRequest.res, nextRequest.next);
         });
       }
     };
 
-    res.on('finish', cleanup);
-    res.on('close', cleanup);
-    res.on('error', cleanup);
+    res.once('finish', cleanup);
+    res.once('close', cleanup);
+    res.once('error', cleanup);
 
     next();
   }
