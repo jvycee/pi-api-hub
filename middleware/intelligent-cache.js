@@ -1,5 +1,19 @@
+const crypto = require('crypto');
 const logger = require('../shared/logger');
 const { performance } = require('perf_hooks');
+
+// Method, path, and query identify a GET. POST search bodies change the
+// response, so callers that opt in add a digest instead of the raw body.
+function requestCacheKey(req, options = {}) {
+  const query = JSON.stringify(req.query || {});
+  let key = `${req.method}:${req.path}:${query}`;
+  if (options.includeBody) {
+    const body = JSON.stringify(req.body ?? null);
+    const digest = crypto.createHash('sha256').update(body).digest('hex');
+    key += `:${digest}`;
+  }
+  return key;
+}
 
 class IntelligentCache {
   constructor(options = {}) {
@@ -424,7 +438,7 @@ class IntelligentCache {
 
   // Middleware for Express
   middleware(options = {}) {
-    const keyGenerator = options.keyGenerator || ((req) => `${req.method}:${req.path}:${JSON.stringify(req.query)}`);
+    const keyGenerator = options.keyGenerator || ((req) => requestCacheKey(req));
     const ttl = options.ttl || this.defaultTTL;
     const skipCache = options.skipCache || (() => false);
     
@@ -521,3 +535,4 @@ class IntelligentCache {
 }
 
 module.exports = IntelligentCache;
+module.exports.requestCacheKey = requestCacheKey;
